@@ -27,6 +27,7 @@ local pendingInvite = nil
 local invitePromptGroup = nil
 local acceptInvitePrompt = nil
 local declineInvitePrompt = nil
+local currentBalloonNetId = nil
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Damage System Variables
@@ -352,12 +353,16 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon, damageStatus)
             menu.close()
 
         elseif data.current.value == "repair" then
-            TriggerServerEvent('rs_balloon:repairBalloon')
+            if currentBalloonNetId then
+                TriggerServerEvent('rs_balloon:repairBalloon', currentBalloonNetId)
+            end
             menu.close()
 
         elseif data.current.value == "invite" then
             menu.close()
-            OpenInviteMenu()
+            if currentBalloonNetId then
+                OpenInviteMenu()
+            end
 
         elseif data.current.value == "transfer" then
             if not hasBalloon then
@@ -433,8 +438,8 @@ function OpenInviteMenu()
         elements = nearbyPlayers,
     },
     function(data, menu)
-        if data.current.value then
-            TriggerServerEvent('rs_balloon:sendInvite', data.current.value)
+        if data.current.value and currentBalloonNetId then
+            TriggerServerEvent('rs_balloon:invitePassenger', currentBalloonNetId, data.current.value)
             menu.close()
         end
     end,
@@ -580,6 +585,7 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
         DeleteVehicle(spawn_balloon)
         spawn_balloon = nil
         current_balloon_id = nil
+        currentBalloonNetId = nil
     end
    
     local spawnCoords = Config.BalloonLocations[locationIndex].spawn
@@ -592,9 +598,10 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
     SetModelAsNoLongerNeeded(balloonModel)
 
     current_balloon_id = balloonId
+    currentBalloonNetId = netId
     
     -- Register as owner
-    TriggerServerEvent('rs_balloon:registerAsOwner', netId)
+    TriggerServerEvent('rs_balloon:trackBalloonOwner', netId)
     balloonOwnerSource = GetPlayerServerId(PlayerId())
 end)
 
@@ -670,9 +677,10 @@ AddEventHandler('rs_balloon:spawnBalloon', function(locationName)
     SetModelAsNoLongerNeeded(ballonModel)
 
     current_ballon_id = locationName
+    currentBalloonNetId = netId
     
     -- Register as owner
-    TriggerServerEvent('rs_balloon:registerAsOwner', netId)
+    TriggerServerEvent('rs_balloon:trackBalloonOwner', netId)
     balloonOwnerSource = GetPlayerServerId(PlayerId())
 end)
 
@@ -696,10 +704,11 @@ AddEventHandler('rs_balloon:setOwner', function(ownerSource)
 end)
 
 RegisterNetEvent('rs_balloon:receiveInvite')
-AddEventHandler('rs_balloon:receiveInvite', function(fromPlayerName, fromPlayerId)
+AddEventHandler('rs_balloon:receiveInvite', function(fromPlayerId, fromPlayerName, balloonNetId)
     pendingInvite = {
         fromName = fromPlayerName,
-        fromId = fromPlayerId
+        fromId = fromPlayerId,
+        balloonNetId = balloonNetId
     }
     Core.NotifyLeft("Balloon Invite", "You received an invite from " .. fromPlayerName, "generic_textures", "tick", 5000, "COLOR_BLUE")
 end)
@@ -765,19 +774,17 @@ end)
 AddEventHandler('gameEventTriggered', function(eventName, eventData)
     if not balloon or not DoesEntityExist(balloon) then return end
     
+    -- CEventNetworkEntityDamage structure: [victim, attacker, weaponInfoIndex, isDead, weaponInfoIndex2, hitComponent, weaponHash]
     if eventName == 'CEventNetworkEntityDamage' then
         local victim = eventData[1]
         local attacker = eventData[2]
         local isDead = eventData[4]
         local weaponHash = eventData[7]
         
-        if victim == balloon then
-            local weaponName = "UNKNOWN"
-            if weaponHash then
-                weaponName = tostring(weaponHash)
-            end
+        if victim == balloon and currentBalloonNetId then
+            local damageAmount = 1
             
-            TriggerServerEvent('rs_balloon:balloonHit', weaponName)
+            TriggerServerEvent('rs_balloon:balloonDamaged', currentBalloonNetId, damageAmount)
             balloonDamaged = true
         end
     end
@@ -816,9 +823,9 @@ Citizen.CreateThread(function()
             local playerPed = PlayerPedId()
             local currentHealth = GetEntityHealth(playerPed)
             
-            if balloonOwnerSource == GetPlayerServerId(PlayerId()) then
+            if balloonOwnerSource == GetPlayerServerId(PlayerId()) and currentBalloonNetId then
                 if lastPlayerHealth and currentHealth <= 0 and lastPlayerHealth > 0 then
-                    TriggerServerEvent('rs_balloon:ownerDied')
+                    TriggerServerEvent('rs_balloon:ownerDied', currentBalloonNetId)
                 end
                 lastPlayerHealth = currentHealth
             end
