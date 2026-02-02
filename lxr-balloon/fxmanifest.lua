@@ -2,9 +2,12 @@ fx_version "cerulean"
 game "rdr3"
 rdr3_warning "I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships."
 
+-- Optional dependencies (not required, script supports multiple frameworks)
+-- The script will auto-detect which framework is available
+-- Supported: lxr-core (primary), rsg-core (primary), vorp_core (legacy), redem_roleplay (legacy), standalone
 dependencies {
-	'vorp_core',
-	'uiprompt'
+	'/onesync',
+	'/server:5848'
 }
 
 client_scripts {
@@ -16,7 +19,8 @@ client_scripts {
 
 shared_scripts {
 	'translation/translation.lua',
-	'config.lua'
+	'config.lua',
+	'framework.lua'
 }
 
 server_scripts {

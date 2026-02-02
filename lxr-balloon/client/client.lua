@@ -1,5 +1,16 @@
-local Core = exports.vorp_core:GetCore()
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🐺 LXR Balloon System - Client Script
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Multi-framework support: lxr-core (primary), rsg-core (primary), vorp (legacy), standalone
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local Core = nil
 local T = Translation.Langs[Config.Lang]
+
+-- Initialize framework on client start
+Citizen.CreateThread(function()
+    Core = Framework.InitClient()
+end)
 local NPCss = {}
 local balloon
 local lockZ = false
