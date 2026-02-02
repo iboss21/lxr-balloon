@@ -40,8 +40,46 @@
     - RedEM:RP
     - Standalone
     
+    ═══════════════════════════════════════════════════════════════════════════════
+    CREDITS
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    Original Script Author: riversafe (https://github.com/riversafe33)
+    Modified & Branded by: iBoss21 / The Lux Empire for The Land of Wolves
+    
     © 2026 iBoss21 / The Lux Empire | wolves.land | All Rights Reserved
+    Original Script © riversafe | With respect and appreciation
 ]]
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🐺 RESOURCE NAME PROTECTION - RUNTIME CHECK
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Additional safeguard: Verify resource name at config load time
+-- This prevents the script from functioning if renamed
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local REQUIRED_RESOURCE_NAME = "lxr-balloon"
+local currentResourceName = GetCurrentResourceName()
+
+if currentResourceName ~= REQUIRED_RESOURCE_NAME then
+    error(string.format([[
+        
+        ═══════════════════════════════════════════════════════════════════════════════
+        ❌ CRITICAL ERROR: RESOURCE NAME MISMATCH ❌
+        ═══════════════════════════════════════════════════════════════════════════════
+        
+        Expected: %s
+        Got: %s
+        
+        This resource is branded and must maintain the correct name.
+        Rename the folder to "%s" to continue.
+        
+        🐺 wolves.land - The Land of Wolves
+        
+        ═══════════════════════════════════════════════════════════════════════════════
+        
+    ]], REQUIRED_RESOURCE_NAME, currentResourceName, REQUIRED_RESOURCE_NAME))
+end
 
 Config = {}
 
@@ -68,6 +106,74 @@ Config.ServerInfo = {
     
     -- Tags
     tags = {'RedM', 'Georgian', 'SeriousRP', 'Whitelist', 'Transportation', 'Balloon', 'Economy'}
+}
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ████████████████████████ FRAMEWORK CONFIGURATION ███████████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+--[[
+    Framework Priority (in order):
+    1. LXRCore (Primary) - https://github.com/lxrcore - The Land of Wolves
+    2. RSG-Core (Primary) - https://github.com/Rexshack-RedM
+    3. VORP Core (Legacy Support)
+    4. RedEM:RP (Legacy Support)
+    5. Standalone (No Framework)
+    
+    The script will auto-detect which framework is running.
+    Set Config.Framework to override auto-detection.
+]]
+
+Config.Framework = 'auto' -- Options: 'auto', 'lxrcore', 'rsg-core', 'vorp', 'redemrp', 'standalone'
+
+-- Framework-specific resource names and triggers
+Config.FrameworkSettings = {
+    lxrcore = {
+        enabled = true,
+        resource = 'lxr-core',
+        exportName = 'lxr-core',
+        getSharedObject = 'lxr-core:getSharedObject',
+        playerLoaded = 'LXR:Client:OnPlayerLoaded',
+        playerUnloaded = 'LXR:Client:OnPlayerUnload',
+        jobUpdate = 'LXR:Client:OnJobUpdate',
+        notification = 'lxr', -- 'lxr', 'vorp', 'native'
+    },
+    ['rsg-core'] = {
+        enabled = true,
+        resource = 'rsg-core',
+        exportName = 'rsg-core',
+        getSharedObject = 'rsg-core:getSharedObject',
+        playerLoaded = 'RSGCore:Client:OnPlayerLoaded',
+        playerUnloaded = 'RSGCore:Client:OnPlayerUnload',
+        jobUpdate = 'RSGCore:Client:OnJobUpdate',
+        notification = 'rsg',
+    },
+    vorp = {
+        enabled = true,
+        resource = 'vorp_core',
+        exportName = 'vorp_core',
+        getSharedObject = 'vorp:getSharedObject',
+        playerLoaded = 'vorp:SelectedCharacter',
+        playerUnloaded = 'vorp:PlayerLogout',
+        jobUpdate = 'vorp:updateJob',
+        notification = 'vorp',
+    },
+    redemrp = {
+        enabled = true,
+        resource = 'redem_roleplay',
+        exportName = 'redem_roleplay',
+        getSharedObject = 'redem:getSharedObject',
+        playerLoaded = 'RedEM:PlayerLoaded',
+        playerUnloaded = 'RedEM:PlayerUnload',
+        jobUpdate = 'RedEM:JobUpdate',
+        notification = 'redemrp',
+    },
+    standalone = {
+        enabled = true,
+        resource = nil,
+        exportName = nil,
+        notification = 'native',
+    }
 }
 
 -- ████████████████████████████████████████████████████████████████████████████████

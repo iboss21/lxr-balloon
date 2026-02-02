@@ -73,30 +73,97 @@ Thank you for your support! ❤️
 
 ## 🎮 Installation
 
+**⚠️ IMPORTANT: Resource Name Protection**
+
+This resource **MUST** be named `lxr-balloon`. The script includes safeguards that prevent it from running if renamed. This protects the branding and ensures compatibility.
+
 1. Ensure you have the required dependencies installed
-2. Place `rs_balloon` folder in your resources directory
+2. Place `lxr-balloon` folder in your resources directory
 3. Import the `sql.sql` file into your database
-4. Add `ensure rs_balloon` to your server.cfg
+4. Add `ensure lxr-balloon` to your server.cfg
 5. Configure settings in `config.lua` to your preferences
 6. Restart your server
+
+**📖 [Detailed Installation Guide](docs/INSTALLATION.md)**
+
+---
+
+## 🎯 Framework Support
+
+**Primary Support (Priority):**
+- ✅ **LXRCore** - The Land of Wolves custom framework (Priority 1)
+- ✅ **RSG-Core** - Rexshack Gaming framework (Priority 1)
+
+**Legacy Support:**
+- ✅ **VORP Core** - Full support maintained
+- ✅ **RedEM:RP** - Full support maintained
+
+**Standalone:**
+- ✅ Works without any framework
+
+The script auto-detects your framework and adapts accordingly.
+
+**📖 [Framework Configuration Guide](docs/CONFIGURATION.md#framework-support)**
 
 ## ⚙️ Configuration
 
 All settings are controlled via `config.lua`:
 - Language selection
+- Framework configuration (auto-detect or manual)
 - Rental prices and duration
 - Balloon spawn locations
 - Store locations and NPCs
 - Selling percentages
 - Balloon models and prices
 
+**📖 [Complete Configuration Reference](docs/CONFIGURATION.md)**
+
+---
+
+## 🔧 Developer Documentation
+
+Complete API reference with events, exports, and integration examples:
+
+**📖 [Developer Documentation](docs/DEVELOPER.md)**
+
+**Quick Examples:**
+```lua
+-- Check balloon ownership (server)
+local ownsBalloon = exports['lxr-balloon']:GetPlayerBalloonOwnership(source)
+
+-- Spawn balloon (client)
+TriggerEvent('rs_balloon:SpawnBalloon', coords, false)
+
+-- Give balloon (admin server command)
+exports['lxr-balloon']:GiveBalloonToPlayer(playerId, "Hot Air Balloon")
+```
+
+---
+
+## 📚 Documentation
+
+Comprehensive documentation for all users:
+
+- 📖 **[Installation Guide](docs/INSTALLATION.md)** - Step-by-step setup
+- ⚙️ **[Configuration Guide](docs/CONFIGURATION.md)** - All config options
+- 🔧 **[Developer Docs](docs/DEVELOPER.md)** - API, events, exports
+- 📋 **[Changelog](docs/CHANGELOG.md)** - Version history
+- 🎖️ **[Credits](docs/CREDITS.md)** - Attribution
+- 📸 **[Screenshots](docs/SCREENSHOTS.md)** - Media guide
+
 ## 📝 License
 
 © 2026 iBoss21 / The Lux Empire | wolves.land | All Rights Reserved
 
+**Original Script:** © riversafe ([GitHub](https://github.com/riversafe33))  
+**Modified & Branded by:** iBoss21 / The Lux Empire for The Land of Wolves
+
+This script was originally created by riversafe and has been modified and branded for The Land of Wolves server. All modifications and branding are © 2026 iBoss21 / The Lux Empire. The original work and credit belong to riversafe.
+
 ---
 
 **Developer:** iBoss21 / The Lux Empire  
+**Original Author:** riversafe  
 **Version:** 2.0.0  
 **Framework:** VORP Core, RedEM:RP, Standalone  
 **Performance:** Optimized for minimal server overhead and client FPS impact
