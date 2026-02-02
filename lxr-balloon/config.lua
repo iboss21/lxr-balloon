@@ -196,6 +196,18 @@ Config.BallonPrice = 5.00 -- Rental price
 Config.BallonUseTime = 30 -- Rental duration time in minutes
 Config.BalloonModel = "hotairballoon01x"
 
+-- Fuel requirement settings
+Config.FuelRequirement = {
+    enabled = true,                -- Enable/disable fuel requirement for balloon rentals
+    itemName = 'balloon_fuel',     -- Name of the fuel item (must match your server's item database)
+    minMinutesPerFuel = 10,        -- Minimum flight time per fuel can in minutes
+    maxMinutesPerFuel = 15,        -- Maximum flight time per fuel can in minutes
+    -- Note: For 30 minute rental with these settings:
+    --   - Best case: 30/15 = 2 fuel cans needed
+    --   - Worst case: 30/10 = 3 fuel cans needed
+    --   - System will randomly calculate between min and max for realistic consumption
+}
+
 -- Hot Air Balloon Rental locations
 Config.BalloonLocations = {
     [1] = {

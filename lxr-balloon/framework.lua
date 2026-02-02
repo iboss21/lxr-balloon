@@ -178,4 +178,43 @@ function Framework.NotifyLeft(source, title, message, dict, icon, duration, colo
     end
 end
 
+-- Get item count from player inventory (Server-side)
+function Framework.GetItemCount(source, itemName)
+    local User = Framework.GetUser(source)
+    if not User then return 0 end
+
+    if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
+        local item = User.Functions.GetItemByName(itemName)
+        return item and item.amount or 0
+    elseif Framework.Type == 'vorp' then
+        local count = exports.vorp_inventory:getItemCount(source, nil, itemName)
+        return count or 0
+    elseif Framework.Type == 'redemrp' then
+        local item = User.getInventoryItem(itemName)
+        return item and item.count or 0
+    else
+        -- Standalone mode - no inventory system
+        return 999
+    end
+end
+
+-- Remove item from player inventory (Server-side)
+function Framework.RemoveItem(source, itemName, amount)
+    local User = Framework.GetUser(source)
+    if not User then return false end
+
+    if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
+        return User.Functions.RemoveItem(itemName, amount)
+    elseif Framework.Type == 'vorp' then
+        exports.vorp_inventory:subItem(source, itemName, amount)
+        return true
+    elseif Framework.Type == 'redemrp' then
+        User.removeInventoryItem(itemName, amount)
+        return true
+    else
+        -- Standalone mode - no inventory system
+        return true
+    end
+end
+
 return Framework

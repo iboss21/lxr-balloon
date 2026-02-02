@@ -109,6 +109,21 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
     local cost = Config.BallonPrice
     local duration = Config.BallonUseTime * 60
 
+    -- Check for fuel requirement if enabled
+    if Config.FuelRequirement.enabled then
+        local fuelCount = Framework.GetItemCount(src, Config.FuelRequirement.itemName)
+        
+        -- Calculate required fuel with random consumption
+        -- Random minutes per fuel between min and max
+        local minutesPerFuel = math.random(Config.FuelRequirement.minMinutesPerFuel, Config.FuelRequirement.maxMinutesPerFuel)
+        local requiredFuel = math.ceil(Config.BallonUseTime / minutesPerFuel)
+        
+        if fuelCount < requiredFuel then
+            Framework.NotifyLeft(src, T.Tittle, T.NeedFuel .. " " .. requiredFuel .. " " .. T.FuelCans .. " (" .. T.YouHave .. " " .. fuelCount .. ")",  "menu_textures", "cross", 4000, "COLOR_RED")
+            return
+        end
+    end
+
     if money < cost then
         Framework.NotifyLeft(src, T.Tittle, T.NeedMoney .. "  " .. cost .. "$ " .. T.ToRentBalloon,  "menu_textures", "cross", 4000, "COLOR_RED")
         return
@@ -121,6 +136,13 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
         if result[1] then
             Framework.NotifyLeft(src, T.Tittle, T.AlreadyHasBalloon, "menu_textures", "cross", 4000, "COLOR_RED")
             return
+        end
+
+        -- Remove fuel if requirement is enabled
+        if Config.FuelRequirement.enabled then
+            local minutesPerFuel = math.random(Config.FuelRequirement.minMinutesPerFuel, Config.FuelRequirement.maxMinutesPerFuel)
+            local requiredFuel = math.ceil(Config.BallonUseTime / minutesPerFuel)
+            Framework.RemoveItem(src, Config.FuelRequirement.itemName, requiredFuel)
         end
 
         Character.removeCurrency(0, cost)
