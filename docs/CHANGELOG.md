@@ -44,9 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added example item configuration
 - Added framework compatibility notes
 
-### 🔄 Backward Compatibility
-- Fuel system is disabled by default to maintain compatibility
-- All existing functionality remains unchanged
+### ⚙️ Default Configuration
+- Fuel system is **enabled by default** (can be disabled via `Config.FuelRequirement.enabled = false`)
+- All existing functionality remains unchanged when disabled
 - No database changes required
 
 ---

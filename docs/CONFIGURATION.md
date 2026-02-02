@@ -143,13 +143,14 @@ balloon_fuel = {
     weight = 500,
     type = 'item',
     image = 'baloonfuel.png',
-    unique = true,
-    useable = true,
+    unique = false,         -- Set to false so fuel cans can stack in inventory
+    useable = false,        -- Not directly useable, consumed automatically during rental
     shouldClose = true,
     combinable = nil,
     level = 0,
-    description = 'Fuel for hot air balloons',
-    delete = true
+    description = 'Fuel for hot air balloons'
+    -- Note: Some frameworks use additional properties like 'delete'
+    -- Adjust this configuration to match your framework's item structure
 }
 ```
 
