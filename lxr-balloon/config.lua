@@ -216,6 +216,23 @@ Config.PassengerSystem = {
     inviteTimeout = 30,            -- Time in seconds for invite to expire
 }
 
+-- Balloon damage and repair system settings
+Config.DamageSystem = {
+    enabled = true,                -- Enable/disable damage system
+    arrowHitsToDestroy = 10,       -- Minimum arrow hits to damage balloon (will use random 10-15)
+    arrowHitsToDestroyMax = 15,    -- Maximum arrow hits to damage balloon
+    bulletDamageMultiplier = 2,    -- Bullets count as 2 hits
+    ownerDeathCrash = true,        -- Balloon crashes if owner dies
+    crashDescentSpeed = 0.5,       -- Speed of descent when damaged (negative Z velocity)
+    
+    -- Repair costs
+    repairMoney = 50,              -- Money required to repair
+    repairItems = {
+        { name = 'wood', amount = 5 },      -- Wood required (from crafting script)
+        { name = 'cloth', amount = 3 },     -- Cloth required (from crafting script)
+    }
+}
+
 -- Hot Air Balloon Rental locations
 Config.BalloonLocations = {
     [1] = {
