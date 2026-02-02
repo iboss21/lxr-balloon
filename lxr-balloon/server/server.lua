@@ -1,12 +1,87 @@
-local VORPcore = exports.vorp_core:GetCore()
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🐺 LXR Balloon System - Server Script
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Multi-framework support: lxr-core (primary), rsg-core (primary), vorp (legacy), standalone
+-- ═══════════════════════════════════════════════════════════════════════════════
+
 local T = Translation.Langs[Config.Lang]
+local Core = nil
+
+-- Initialize framework on server start
+Citizen.CreateThread(function()
+    Core = Framework.InitServer()
+end)
+
+-- Helper function to get character data with multi-framework support
+local function GetCharacterData(src)
+    if not Core then return nil end
+    
+    local User = Framework.GetUser(src)
+    if not User then return nil end
+    
+    local Character = {}
+    
+    if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
+        local PlayerData = User.PlayerData
+        if not PlayerData then return nil end
+        
+        Character.identifier = PlayerData.citizenid or PlayerData.cid
+        Character.charIdentifier = PlayerData.citizenid or PlayerData.cid
+        Character.money = PlayerData.money.cash or 0
+        
+        -- Add currency management functions
+        Character.removeCurrency = function(currencyType, amount)
+            User.Functions.RemoveMoney('cash', amount)
+        end
+        
+        Character.addCurrency = function(currencyType, amount)
+            User.Functions.AddMoney('cash', amount)
+        end
+    elseif Framework.Type == 'vorp' then
+        local UsedCharacter = User.getUsedCharacter
+        if not UsedCharacter then return nil end
+        
+        Character.identifier = UsedCharacter.identifier
+        Character.charIdentifier = UsedCharacter.charIdentifier
+        Character.money = UsedCharacter.money or 0
+        Character.removeCurrency = UsedCharacter.removeCurrency
+        Character.addCurrency = UsedCharacter.addCurrency
+    elseif Framework.Type == 'redemrp' then
+        Character.identifier = User.getIdentifier()
+        Character.charIdentifier = User.getIdentifier()
+        Character.money = User.getMoney() or 0
+        
+        Character.removeCurrency = function(currencyType, amount)
+            User.removeMoney(amount)
+        end
+        
+        Character.addCurrency = function(currencyType, amount)
+            User.addMoney(amount)
+        end
+    else
+        -- Standalone mode - basic structure
+        Character.identifier = tostring(src)
+        Character.charIdentifier = tostring(src)
+        Character.money = 999999 -- No economy in standalone
+        Character.removeCurrency = function() end
+        Character.addCurrency = function() end
+    end
+    
+    return Character
+end
 
 RegisterServerEvent('rs_balloon:checkOwned')
 AddEventHandler('rs_balloon:checkOwned', function()
     local src = source
-    local User = VORPcore.getUser(src).getUsedCharacter
-    local u_identifier = User.identifier
-    local u_charid = User.charIdentifier
+    local Character = GetCharacterData(src)
+    
+    if not Character then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        return
+    end
+    
+    local u_identifier = Character.identifier
+    local u_charid = Character.charIdentifier
 
     exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
         ['@identifier'] = u_identifier,
@@ -23,17 +98,19 @@ end)
 RegisterNetEvent('rs_balloon:RentBalloon')
 AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
     local src = source
-    local Character = VORPcore.getUser(src).getUsedCharacter
+    local Character = GetCharacterData(src)
+    
+    if not Character or not Character.identifier then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        return
+    end
+    
     local money = Character.money
     local cost = Config.BallonPrice
     local duration = Config.BallonUseTime * 60
 
-    if not Character or not Character.identifier then
-        return
-    end
-
     if money < cost then
-        VORPcore.NotifyLeft(src, T.Tittle, T.NeedMoney .. "  " .. cost .. "$ " .. T.ToRentBalloon,  "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.NotifyLeft(src, T.Tittle, T.NeedMoney .. "  " .. cost .. "$ " .. T.ToRentBalloon,  "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -42,12 +119,12 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
         Character.charIdentifier
     }, function(result)
         if result[1] then
-            VORPcore.NotifyLeft(src, T.Tittle, T.AlreadyHasBalloon, "menu_textures", "cross", 4000, "COLOR_RED")
+            Framework.NotifyLeft(src, T.Tittle, T.AlreadyHasBalloon, "menu_textures", "cross", 4000, "COLOR_RED")
             return
         end
 
         Character.removeCurrency(0, cost)
-        VORPcore.NotifyLeft(src, T.Tittle, T.BalloonRented .. " " .. Config.BallonUseTime .. " " .. T.Minutes, "generic_textures", "tick", 4000, "COLOR_GREEN")
+        Framework.NotifyLeft(src, T.Tittle, T.BalloonRented .. " " .. Config.BallonUseTime .. " " .. T.Minutes, "generic_textures", "tick", 4000, "COLOR_GREEN")
 
         exports.oxmysql:execute("INSERT INTO balloon_rentals (user_id, character_id, duration) VALUES (?, ?, ?)", {
             Character.identifier,
@@ -125,7 +202,7 @@ end
 RegisterNetEvent("rs_balloon:removeBalloonFromSQL")
 AddEventHandler("rs_balloon:removeBalloonFromSQL", function()
     local src = source
-    local Character = VORPcore.getUser(src).getUsedCharacter
+    local Character = GetCharacterData(src)
 
     if not Character or not Character.identifier then
         return
@@ -141,18 +218,23 @@ RegisterServerEvent('rs_balloon:buyballoon')
 AddEventHandler('rs_balloon:buyballoon', function(args)
     local _price = args['Price']
     local _name = args['Name']
-    local User = VORPcore.getUser(source).getUsedCharacter
-
-    local u_identifier = User.identifier
-    local u_charid = User.charIdentifier
-    local u_money = User.money
-
-    if u_money < _price then
-        VORPcore.NotifyLeft(source, T.Tittle, T.Noti,  "menu_textures", "cross", 4000, "COLOR_RED")
+    local Character = GetCharacterData(source)
+    
+    if not Character then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
         return
     end
 
-    User.removeCurrency(0, _price)
+    local u_identifier = Character.identifier
+    local u_charid = Character.charIdentifier
+    local u_money = Character.money
+
+    if u_money < _price then
+        Framework.NotifyLeft(source, T.Tittle, T.Noti,  "menu_textures", "cross", 4000, "COLOR_RED")
+        return
+    end
+
+    Character.removeCurrency(0, _price)
 
     local Parameters = {
         ['identifier'] = u_identifier,
@@ -161,15 +243,21 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
     }
 
     exports.oxmysql:execute("INSERT INTO balloon_buy (`identifier`, `charid`, `name`) VALUES (@identifier, @charid, @name)", Parameters)
-    VORPcore.NotifyLeft(source, T.Tittle, T.Noti1, "generic_textures", "tick", 4000, "COLOR_GREEN")
+    Framework.NotifyLeft(source, T.Tittle, T.Noti1, "generic_textures", "tick", 4000, "COLOR_GREEN")
 end)
 
 RegisterServerEvent('rs_balloon:loadownedBallons')
 AddEventHandler('rs_balloon:loadownedBallons', function()
     local _source = source
-    local User = VORPcore.getUser(_source).getUsedCharacter
-    local u_identifier = User.identifier
-    local u_charid = User.charIdentifier
+    local Character = GetCharacterData(_source)
+    
+    if not Character then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. _source)
+        return
+    end
+    
+    local u_identifier = Character.identifier
+    local u_charid = Character.charIdentifier
 
     local Parameters = {
         ['@identifier'] = u_identifier,
@@ -186,16 +274,18 @@ end)
 RegisterServerEvent('rs_balloon:transferBalloon')
 AddEventHandler('rs_balloon:transferBalloon', function(targetId)
     local src = source
-    local sender = VORPcore.getUser(src).getUsedCharacter
-    local target = VORPcore.getUser(tonumber(targetId))
-    if not target then
+    local sender = GetCharacterData(src)
+    local targetCharacter = GetCharacterData(tonumber(targetId))
+    
+    if not sender or not targetCharacter then
+        print('[lxr-balloon] ERROR: Could not get character data for transfer')
         return
     end
 
     local sender_identifier = sender.identifier
     local sender_charid = sender.charIdentifier
-    local target_identifier = target.getUsedCharacter.identifier
-    local target_charid = target.getUsedCharacter.charIdentifier
+    local target_identifier = targetCharacter.identifier
+    local target_charid = targetCharacter.charIdentifier
 
     -- Verificar si el receptor ya tiene un globo
     exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
@@ -203,7 +293,7 @@ AddEventHandler('rs_balloon:transferBalloon', function(targetId)
         ['@charid'] = target_charid
     }, function(existing)
         if existing and existing[1] then
-            VORPcore.NotifyLeft(src, T.Tittle, T.has, "menu_textures", "cross", 4000, "COLOR_RED")
+            Framework.NotifyLeft(src, T.Tittle, T.has, "menu_textures", "cross", 4000, "COLOR_RED")
         else
             -- Transferir el globo al nuevo jugador
             exports.oxmysql:execute('UPDATE balloon_buy SET identifier = @newIdentifier, charid = @newCharId WHERE identifier = @oldIdentifier AND charid = @oldCharId LIMIT 1', {
@@ -212,8 +302,8 @@ AddEventHandler('rs_balloon:transferBalloon', function(targetId)
                 ['@oldIdentifier'] = sender_identifier,
                 ['@oldCharId'] = sender_charid
             }, function()
-                VORPcore.NotifyLeft(src, T.Tittle, T.Tranfer, "generic_textures", "tick", 4000, "COLOR_GREEN")
-                VORPcore.NotifyLeft(tonumber(targetId), T.Tittle, T.Received, "generic_textures", "tick", 4000, "COLOR_GREEN")
+                Framework.NotifyLeft(src, T.Tittle, T.Tranfer, "generic_textures", "tick", 4000, "COLOR_GREEN")
+                Framework.NotifyLeft(tonumber(targetId), T.Tittle, T.Received, "generic_textures", "tick", 4000, "COLOR_GREEN")
             end)
         end
     end)
@@ -222,14 +312,19 @@ end)
 RegisterServerEvent('rs_balloon:sellballoon')
 AddEventHandler('rs_balloon:sellballoon', function(args)
     if not args then
-        VORPcore.NotifyLeft(source, T.Tittle, T.Error, "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.NotifyLeft(source, T.Tittle, T.Error, "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
-    local User = VORPcore.getUser(source).getUsedCharacter
+    local Character = GetCharacterData(source)
+    
+    if not Character then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
+        return
+    end
 
-    local u_identifier = User.identifier
-    local u_charid = User.charIdentifier
+    local u_identifier = Character.identifier
+    local u_charid = Character.charIdentifier
     local original_price = nil
 
     for _, globo in pairs(Config.Globo) do
@@ -240,15 +335,15 @@ AddEventHandler('rs_balloon:sellballoon', function(args)
     if original_price then
         local sell_price = original_price * Config.Sellprice
 
-        User.addCurrency(0, sell_price)
+        Character.addCurrency(0, sell_price)
 
         exports.oxmysql:execute("DELETE FROM balloon_buy WHERE identifier = @identifier AND charid = @charid", {
             ['@identifier'] = u_identifier,
             ['@charid'] = u_charid,
         })
-        VORPcore.NotifyLeft(source, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
+        Framework.NotifyLeft(source, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
     else
-        VORPcore.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
     end
 end)
 
