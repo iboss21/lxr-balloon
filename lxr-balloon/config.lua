@@ -208,6 +208,14 @@ Config.FuelRequirement = {
     --   - System will randomly calculate between min and max for realistic consumption
 }
 
+-- Passenger invite system settings
+Config.PassengerSystem = {
+    enabled = true,                -- Enable/disable passenger invite system
+    maxPassengers = 2,             -- Maximum passengers (not including owner), total 3 players
+    inviteDistance = 10.0,         -- Maximum distance in meters to invite a player
+    inviteTimeout = 30,            -- Time in seconds for invite to expire
+}
+
 -- Hot Air Balloon Rental locations
 Config.BalloonLocations = {
     [1] = {
