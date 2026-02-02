@@ -10,6 +10,8 @@ Framework.Core = nil
 Framework.Type = nil
 
 -- Framework detection function
+-- Note: Framework type names match Config.FrameworkSettings keys:
+--   'lxrcore' (no hyphen) and 'rsg-core' (with hyphen) match the config structure
 function Framework.Detect()
     if Config.Framework ~= 'auto' then
         return Config.Framework
@@ -17,12 +19,12 @@ function Framework.Detect()
 
     -- Priority 1: LXRCore (The Land of Wolves)
     if GetResourceState('lxr-core') == 'started' then
-        return 'lxrcore'
+        return 'lxrcore'  -- Matches config key
     end
 
     -- Priority 1: RSG-Core (Rexshack Gaming)
     if GetResourceState('rsg-core') == 'started' then
-        return 'rsg-core'
+        return 'rsg-core'  -- Matches config key
     end
 
     -- Legacy: VORP Core
@@ -140,7 +142,7 @@ function Framework.GetCharacter(source)
     if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
         return User.PlayerData
     elseif Framework.Type == 'vorp' then
-        return User.getUsedCharacter
+        return User.getUsedCharacter  -- Property, not a function
     elseif Framework.Type == 'redemrp' then
         return User
     end
