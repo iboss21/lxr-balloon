@@ -58,7 +58,7 @@ Citizen.CreateThread(function()
         local playerPed = PlayerPedId()
         local vehiclePedIsIn = GetVehiclePedIsIn(playerPed, false)
 
-        if vehiclePedIsIn ~= 0 and GetEntityModel(vehiclePedIsIn) == `hotairballoon01` then
+        if vehiclePedIsIn ~= 0 and GetEntityModel(vehiclePedIsIn) == GetHashKey(Config.BalloonModel) then
             if not balloon then
                 balloon = vehiclePedIsIn
             end
@@ -435,7 +435,7 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
         return
     end
 
-    local balloonModel = GetHashKey('hotAirBalloon01')
+    local balloonModel = GetHashKey(Config.BalloonModel)
 
     RequestModel(balloonModel)
     while not HasModelLoaded(balloonModel) do
@@ -459,6 +459,10 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
     SetModelAsNoLongerNeeded(balloonModel)
 
     current_balloon_id = balloonId
+    
+    -- Put player into the balloon
+    local playerPed = PlayerPedId()
+    TaskWarpPedIntoVehicle(playerPed, spawn_balloon, -1)
 end)
 
 RegisterNetEvent("rs_balloon:deleteTemporaryBalloon")
@@ -516,7 +520,7 @@ AddEventHandler('rs_balloon:spawnBalloon', function(locationName)
     end
 
     local spawnCoords = markerData.spawn
-    local ballonModel = GetHashKey('hotAirBalloon01')
+    local ballonModel = GetHashKey(Config.BalloonModel)
 
     RequestModel(ballonModel)
     while not HasModelLoaded(ballonModel) do
@@ -533,6 +537,10 @@ AddEventHandler('rs_balloon:spawnBalloon', function(locationName)
     SetModelAsNoLongerNeeded(ballonModel)
 
     current_ballon_id = locationName
+    
+    -- Put player into the balloon
+    local playerPed = PlayerPedId()
+    TaskWarpPedIntoVehicle(playerPed, spawn_ballon, -1)
 end)
 
 AddEventHandler('onResourceStop', function(resourceName)
