@@ -421,7 +421,7 @@ Found a bug? Have a suggestion?
 
 ## 🔄 Version
 
-**Current Version:** 2.1.0  
+**Current Version:** 2.2.0  
 **Last Updated:** February 2, 2026  
 **Compatibility:** RedM Build 1491+
 
