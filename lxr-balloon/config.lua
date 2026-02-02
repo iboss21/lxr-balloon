@@ -196,6 +196,43 @@ Config.BallonPrice = 5.00 -- Rental price
 Config.BallonUseTime = 30 -- Rental duration time in minutes
 Config.BalloonModel = "hotairballoon01x"
 
+-- Fuel requirement settings
+Config.FuelRequirement = {
+    enabled = true,                -- Enable/disable fuel requirement for balloon rentals
+    itemName = 'balloon_fuel',     -- Name of the fuel item (must match your server's item database)
+    minMinutesPerFuel = 10,        -- Minimum flight time per fuel can in minutes
+    maxMinutesPerFuel = 15,        -- Maximum flight time per fuel can in minutes
+    -- Note: For 30 minute rental with these settings:
+    --   - Best case: 30/15 = 2 fuel cans needed
+    --   - Worst case: 30/10 = 3 fuel cans needed
+    --   - System will randomly calculate between min and max for realistic consumption
+}
+
+-- Passenger invite system settings
+Config.PassengerSystem = {
+    enabled = true,                -- Enable/disable passenger invite system
+    maxPassengers = 2,             -- Maximum passengers (not including owner), total 3 players
+    inviteDistance = 10.0,         -- Maximum distance in meters to invite a player
+    inviteTimeout = 30,            -- Time in seconds for invite to expire
+}
+
+-- Balloon damage and repair system settings
+Config.DamageSystem = {
+    enabled = true,                -- Enable/disable damage system
+    arrowHitsToDestroy = 10,       -- Minimum arrow hits to damage balloon (will use random 10-15)
+    arrowHitsToDestroyMax = 15,    -- Maximum arrow hits to damage balloon
+    bulletDamageMultiplier = 2,    -- Bullets count as 2 hits
+    ownerDeathCrash = true,        -- Balloon crashes if owner dies
+    crashDescentSpeed = 0.5,       -- Speed of descent when damaged (negative Z velocity)
+    
+    -- Repair costs
+    repairMoney = 50,              -- Money required to repair
+    repairItems = {
+        { name = 'wood', amount = 5 },      -- Wood required (from crafting script)
+        { name = 'cloth', amount = 3 },     -- Cloth required (from crafting script)
+    }
+}
+
 -- Hot Air Balloon Rental locations
 Config.BalloonLocations = {
     [1] = {

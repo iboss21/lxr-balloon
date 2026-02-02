@@ -97,6 +97,63 @@ Config.BalloonModel = "hotairballoon01x"
 - **BallonUseTime**: How long the rental lasts (in minutes)
 - **BalloonModel**: Game model name (do not change unless using custom models)
 
+### Fuel Requirement Settings
+
+New in this version! You can now require players to have fuel items to rent balloons:
+
+```lua
+Config.FuelRequirement = {
+    enabled = true,                -- Enable/disable fuel requirement
+    itemName = 'balloon_fuel',     -- Name of the fuel item in your inventory system
+    minMinutesPerFuel = 10,        -- Minimum flight time per fuel can
+    maxMinutesPerFuel = 15,        -- Maximum flight time per fuel can
+}
+```
+
+**How It Works:**
+
+1. **Random Consumption**: The system randomly calculates fuel consumption between min and max values
+2. **Example Calculation** (for 30 minute rental):
+   - Best case: 30 ÷ 15 = **2 fuel cans** needed
+   - Worst case: 30 ÷ 10 = **3 fuel cans** needed
+   - Each rental randomly picks consumption rate for realistic gameplay
+
+**Configuration Options:**
+
+- **enabled**: 
+  - `true` = Fuel requirement is active
+  - `false` = Disabled (only money required)
+- **itemName**: Must match your item name exactly (case-sensitive)
+- **minMinutesPerFuel**: Lower value = more fuel consumption
+- **maxMinutesPerFuel**: Higher value = less fuel consumption
+
+**Framework Compatibility:**
+- ✅ LXRCore
+- ✅ RSG-Core  
+- ✅ VORP Core
+- ✅ RedEM:RP
+- ✅ Standalone (fuel always available in standalone mode)
+
+**Item Setup:**
+The fuel item must exist in your server's item database. Example item configuration:
+```lua
+balloon_fuel = {
+    name = 'balloon_fuel',
+    label = 'Balloon Fuel',
+    weight = 500,
+    type = 'item',
+    image = 'baloonfuel.png',
+    unique = false,         -- Set to false so fuel cans can stack in inventory
+    useable = false,        -- Not directly useable, consumed automatically during rental
+    shouldClose = true,
+    combinable = nil,
+    level = 0,
+    description = 'Fuel for hot air balloons'
+    -- Note: Some frameworks use additional properties like 'delete'
+    -- Adjust this configuration to match your framework's item structure
+}
+```
+
 ### Rental Locations
 
 Add as many rental locations as you want:

@@ -18,6 +18,24 @@ local useCameraRelativeControls = true
 local spawn_balloon = nil
 local current_balloon_id = nil
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Passenger System Variables
+-- ═══════════════════════════════════════════════════════════════════════════════
+local balloonOwnerSource = nil
+local passengerCount = 0
+local pendingInvite = nil
+local invitePromptGroup = nil
+local acceptInvitePrompt = nil
+local declineInvitePrompt = nil
+local currentBalloonNetId = nil
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Damage System Variables
+-- ═══════════════════════════════════════════════════════════════════════════════
+local isBalloonCrashing = false
+local balloonDamaged = false
+local lastPlayerHealth = nil
+
 local balloonPrompts = UipromptGroup:new(T.Prompts.Ballon)
 local nsPrompt = Uiprompt:new({`INPUT_VEH_MOVE_UP_ONLY`, `INPUT_VEH_MOVE_DOWN_ONLY` }, T.Prompts.NorthSouth, balloonPrompts)
 local wePrompt = Uiprompt:new({`INPUT_VEH_MOVE_LEFT_ONLY`, `INPUT_VEH_MOVE_RIGHT_ONLY`}, T.Prompts.WestEast, balloonPrompts)
@@ -25,6 +43,15 @@ local brakePrompt = Uiprompt:new(`INPUT_CONTEXT_X`, T.Prompts.DownBalloon, ballo
 local lockZPrompt = Uiprompt:new(`INPUT_CONTEXT_A`, T.Prompts.LockInAltitude, balloonPrompts)
 local throttlePrompt = Uiprompt:new(`INPUT_VEH_FLY_THROTTLE_UP`, T.Prompts.UpBalloon, balloonPrompts)
 local deleteBalloonPrompt = Uiprompt:new(`INPUT_VEH_HORN`, T.Prompts.RemoveBalloon, balloonPrompts)
+
+-- Invite System Prompts
+local function CreateInvitePrompts()
+    invitePromptGroup = UipromptGroup:new("Balloon Invite")
+    acceptInvitePrompt = Uiprompt:new(`INPUT_FRONTEND_ACCEPT`, "Accept Invite (ENTER)", invitePromptGroup)
+    declineInvitePrompt = Uiprompt:new(`INPUT_FRONTEND_CANCEL`, "Decline Invite (BACKSPACE)", invitePromptGroup)
+end
+
+CreateInvitePrompts()
 
 Citizen.CreateThread(function()
     while true do
@@ -72,82 +99,133 @@ Citizen.CreateThread(function()
     end
 end)
 
+-- Ensure players in balloons can be damaged (no invincibility)
+Citizen.CreateThread(function()
+    while true do
+        local playerPed = PlayerPedId()
+        local vehiclePedIsIn = GetVehiclePedIsIn(playerPed, false)
+        
+        if vehiclePedIsIn ~= 0 and GetEntityModel(vehiclePedIsIn) == `hotairballoon01` then
+            -- Make sure player can be damaged
+            SetEntityCanBeDamaged(playerPed, true)
+            SetEntityInvincible(playerPed, false)
+            SetPlayerInvincible(PlayerId(), false)
+            
+            -- Make sure balloon vehicle doesn't block damage to player
+            SetEntityCanBeDamaged(vehiclePedIsIn, true)
+            SetEntityProofs(vehiclePedIsIn, false, false, false, false, false, false, false, false)
+        end
+        
+        Citizen.Wait(500)
+    end
+end)
+
 Citizen.CreateThread(function()
     local bv
     while true do
         if balloon then
-            balloonPrompts:handleEvents()
-
-            local speed = IsControlPressed(0, `INPUT_VEH_TRAVERSAL`) and 0.15 or 0.05
-            local v1 = GetEntityVelocity(balloon)
-            local v2 = v1
-
-            if useCameraRelativeControls then
-                local forwardVec, rightVec = GetCameraRelativeVectors()
-                if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
-                    v2 = v2 + forwardVec * speed
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
-                    v2 = v2 - forwardVec * speed
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
-                    v2 = v2 - rightVec * speed
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
-                    v2 = v2 + rightVec * speed
-                end
-            else
-                if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
-                    v2 = v2 + vector3(0, speed, 0)
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
-                    v2 = v2 - vector3(0, speed, 0)
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
-                    v2 = v2 - vector3(speed, 0, 0)
-                end
-                if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
-                    v2 = v2 + vector3(speed, 0, 0)
-                end
+            local isOwner = (balloonOwnerSource == GetPlayerServerId(PlayerId()))
+            
+            if isOwner then
+                balloonPrompts:handleEvents()
             end
 
-            if IsControlPressed(0, `INPUT_CONTEXT_X`) then
-                if bv then
-                    local x = bv.x > 0 and bv.x - speed or bv.x + speed
-                    local y = bv.y > 0 and bv.y - speed or bv.y + speed
-                    v2 = vector3(x, y, v2.z)
+            -- Check if player tries to control as non-owner
+            if not isOwner then
+                local tryingControl = IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) or 
+                                    IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) or
+                                    IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) or
+                                    IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) or
+                                    IsControlPressed(0, `INPUT_CONTEXT_X`) or
+                                    IsControlPressed(0, `INPUT_CONTEXT_A`) or
+                                    IsControlPressed(0, `INPUT_VEH_FLY_THROTTLE_UP`)
+                
+                if tryingControl then
+                    Core.NotifyLeft("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 2000, "COLOR_RED")
+                    Citizen.Wait(2000)
                 end
-                bv = v2.xy
+                Citizen.Wait(100)
             else
-                bv = nil
-            end
+                -- Owner controls - existing control logic
+                local speed = IsControlPressed(0, `INPUT_VEH_TRAVERSAL`) and 0.15 or 0.05
+                local v1 = GetEntityVelocity(balloon)
+                local v2 = v1
 
-            if IsControlJustPressed(0, `INPUT_CONTEXT_A`) then
-                lockZ = not lockZ
-                if lockZ then
-                    lockZPrompt:setText(T.Prompts.UnlockInAltitude)
+                -- Apply crash effect if balloon is crashing
+                if isBalloonCrashing then
+                    v2 = vector3(v2.x * 0.9, v2.y * 0.9, -0.5)
+                    SetEntityVelocity(balloon, v2)
+                    Citizen.Wait(0)
                 else
-                    lockZPrompt:setText(T.Prompts.LockInAltitude)
-                end
-            end
+                    if useCameraRelativeControls then
+                        local forwardVec, rightVec = GetCameraRelativeVectors()
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
+                            v2 = v2 + forwardVec * speed
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
+                            v2 = v2 - forwardVec * speed
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
+                            v2 = v2 - rightVec * speed
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
+                            v2 = v2 + rightVec * speed
+                        end
+                    else
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
+                            v2 = v2 + vector3(0, speed, 0)
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
+                            v2 = v2 - vector3(0, speed, 0)
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
+                            v2 = v2 - vector3(speed, 0, 0)
+                        end
+                        if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
+                            v2 = v2 + vector3(speed, 0, 0)
+                        end
+                    end
 
-            if lockZ and not IsControlPressed(0, `INPUT_VEH_FLY_THROTTLE_UP`) then
-                SetEntityVelocity(balloon, vector3(v2.x, v2.y, 0.0))
-            elseif v2 ~= v1 then
-                SetEntityVelocity(balloon, v2)
-            end
+                    if IsControlPressed(0, `INPUT_CONTEXT_X`) then
+                        if bv then
+                            local x = bv.x > 0 and bv.x - speed or bv.x + speed
+                            local y = bv.y > 0 and bv.y - speed or bv.y + speed
+                            v2 = vector3(x, y, v2.z)
+                        end
+                        bv = v2.xy
+                    else
+                        bv = nil
+                    end
 
-            if IsControlJustPressed(0, `INPUT_VEH_HORN`) then
-                if DoesEntityExist(balloon) then
-                    local balloonHeight = GetEntityHeightAboveGround(balloon)
-                    if balloonHeight <= 0.5 then
-                        DeleteEntity(balloon)
-                        balloon = nil
+                    if IsControlJustPressed(0, `INPUT_CONTEXT_A`) then
+                        lockZ = not lockZ
+                        if lockZ then
+                            lockZPrompt:setText(T.Prompts.UnlockInAltitude)
+                        else
+                            lockZPrompt:setText(T.Prompts.LockInAltitude)
+                        end
+                    end
+
+                    if lockZ and not IsControlPressed(0, `INPUT_VEH_FLY_THROTTLE_UP`) then
+                        SetEntityVelocity(balloon, vector3(v2.x, v2.y, 0.0))
+                    elseif v2 ~= v1 then
+                        SetEntityVelocity(balloon, v2)
+                    end
+
+                    if IsControlJustPressed(0, `INPUT_VEH_HORN`) then
+                        if DoesEntityExist(balloon) then
+                            local balloonHeight = GetEntityHeightAboveGround(balloon)
+                            if balloonHeight <= 0.5 then
+                                DeleteEntity(balloon)
+                                balloon = nil
+                                balloonOwnerSource = nil
+                            end
+                        end
                     end
                 end
-            end
 
-            Citizen.Wait(0)
+                Citizen.Wait(0)
+            end
         else
             Citizen.Wait(500)
         end
@@ -240,10 +318,14 @@ local datosVenta = {
 }
 
 RegisterNetEvent('rs_balloon:openMenu')
-AddEventHandler('rs_balloon:openMenu', function(hasBalloon)
+AddEventHandler('rs_balloon:openMenu', function(hasBalloon, damageStatus)
     MenuData.CloseAll()
 
     local elements = {}
+    local playerPed = PlayerPedId()
+    local vehiclePedIsIn = GetVehiclePedIsIn(playerPed, false)
+    local isInBalloon = vehiclePedIsIn ~= 0 and GetEntityModel(vehiclePedIsIn) == `hotairballoon01`
+    local isOwner = balloonOwnerSource == GetPlayerServerId(PlayerId())
 
     if not hasBalloon then
         table.insert(elements, { label = T.Buyballon, value = 'buy', desc = T.Desc1 })
@@ -251,12 +333,31 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon)
         table.insert(elements, { label = T.Property, value = 'own', desc = T.Property1 })
         table.insert(elements, { label = T.SellBalloon, value = 'sell', desc = T.Sell })
         table.insert(elements, { label = T.TransferBalloon, value = 'transfer', desc = T.TransferDesc })
+        
+        -- Add repair option if balloon is damaged
+        if damageStatus and damageStatus.isDamaged then
+            local repairCost = damageStatus.repairCost or 50
+            table.insert(elements, { 
+                label = "Repair Balloon", 
+                value = 'repair', 
+                desc = 'Repair your damaged balloon ($' .. repairCost .. ')'
+            })
+        end
+        
+        -- Add invite option if owner is in balloon
+        if isInBalloon and isOwner then
+            table.insert(elements, { 
+                label = "Invite Passenger", 
+                value = 'invite', 
+                desc = 'Invite a nearby player to your balloon'
+            })
+        end
     end
 
     MenuData.Open('default', GetCurrentResourceName(), 'vorp_menu',
     {
         title    = T.Shop1,
-        subtext  = T.Shop2,
+        subtext  = T.Shop2 .. (isOwner and passengerCount > 0 and " | Passengers: " .. passengerCount or ""),
         align    = 'top-right',
         elements = elements,
     },
@@ -271,6 +372,18 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon)
         elseif data.current.value == "sell" then
             TriggerServerEvent('rs_balloon:sellballoon', datosVenta)
             menu.close()
+
+        elseif data.current.value == "repair" then
+            if currentBalloonNetId then
+                TriggerServerEvent('rs_balloon:repairBalloon', currentBalloonNetId)
+            end
+            menu.close()
+
+        elseif data.current.value == "invite" then
+            menu.close()
+            if currentBalloonNetId then
+                OpenInviteMenu()
+            end
 
         elseif data.current.value == "transfer" then
             if not hasBalloon then
@@ -309,6 +422,53 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon)
         menu.close()
     end)
 end)
+
+function OpenInviteMenu()
+    local nearbyPlayers = {}
+    local playerPed = PlayerPedId()
+    local playerCoords = GetEntityCoords(playerPed)
+    local inviteDistance = Config.PassengerSystem and Config.PassengerSystem.inviteDistance or 10.0
+    
+    for _, player in ipairs(GetActivePlayers()) do
+        if player ~= PlayerId() then
+            local targetPed = GetPlayerPed(player)
+            local targetCoords = GetEntityCoords(targetPed)
+            local distance = #(playerCoords - targetCoords)
+            
+            if distance < inviteDistance then
+                local serverId = GetPlayerServerId(player)
+                local playerName = GetPlayerName(player)
+                table.insert(nearbyPlayers, {
+                    label = playerName .. " (ID: " .. serverId .. ")",
+                    value = serverId,
+                    desc = "Distance: " .. math.floor(distance) .. "m"
+                })
+            end
+        end
+    end
+    
+    if #nearbyPlayers == 0 then
+        Core.NotifyLeft("Balloon", "No nearby players to invite", "menu_textures", "cross", 3000, "COLOR_RED")
+        return
+    end
+    
+    MenuData.Open('default', GetCurrentResourceName(), 'invite_menu',
+    {
+        title    = "Invite Player",
+        subtext  = "Select a player to invite",
+        align    = 'top-right',
+        elements = nearbyPlayers,
+    },
+    function(data, menu)
+        if data.current.value and currentBalloonNetId then
+            TriggerServerEvent('rs_balloon:invitePassenger', currentBalloonNetId, data.current.value)
+            menu.close()
+        end
+    end,
+    function(data, menu)
+        menu.close()
+    end)
+end
 
 function OpenOwnBallonMenu()
     MenuData.CloseAll()
@@ -447,6 +607,7 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
         DeleteVehicle(spawn_balloon)
         spawn_balloon = nil
         current_balloon_id = nil
+        currentBalloonNetId = nil
     end
    
     local spawnCoords = Config.BalloonLocations[locationIndex].spawn
@@ -459,6 +620,11 @@ AddEventHandler('rs_balloon:spawnBalloon1', function(balloonId, locationIndex)
     SetModelAsNoLongerNeeded(balloonModel)
 
     current_balloon_id = balloonId
+    currentBalloonNetId = netId
+    
+    -- Register as owner
+    TriggerServerEvent('rs_balloon:trackBalloonOwner', netId)
+    balloonOwnerSource = GetPlayerServerId(PlayerId())
 end)
 
 RegisterNetEvent("rs_balloon:deleteTemporaryBalloon")
@@ -533,6 +699,11 @@ AddEventHandler('rs_balloon:spawnBalloon', function(locationName)
     SetModelAsNoLongerNeeded(ballonModel)
 
     current_ballon_id = locationName
+    currentBalloonNetId = netId
+    
+    -- Register as owner
+    TriggerServerEvent('rs_balloon:trackBalloonOwner', netId)
+    balloonOwnerSource = GetPlayerServerId(PlayerId())
 end)
 
 AddEventHandler('onResourceStop', function(resourceName)
@@ -541,6 +712,147 @@ AddEventHandler('onResourceStop', function(resourceName)
     for _, npc in pairs(NPCss) do
         if DoesEntityExist(npc) then
             DeleteEntity(npc)
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Passenger System Events
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+RegisterNetEvent('rs_balloon:setOwner')
+AddEventHandler('rs_balloon:setOwner', function(ownerSource)
+    balloonOwnerSource = ownerSource
+end)
+
+RegisterNetEvent('rs_balloon:receiveInvite')
+AddEventHandler('rs_balloon:receiveInvite', function(fromPlayerId, fromPlayerName, balloonNetId)
+    pendingInvite = {
+        fromName = fromPlayerName,
+        fromId = fromPlayerId,
+        balloonNetId = balloonNetId
+    }
+    Core.NotifyLeft("Balloon Invite", "You received an invite from " .. fromPlayerName, "generic_textures", "tick", 5000, "COLOR_BLUE")
+end)
+
+RegisterNetEvent('rs_balloon:inviteExpired')
+AddEventHandler('rs_balloon:inviteExpired', function()
+    pendingInvite = nil
+    Core.NotifyLeft("Balloon Invite", "Invite expired", "menu_textures", "cross", 3000, "COLOR_RED")
+end)
+
+RegisterNetEvent('rs_balloon:passengerJoined')
+AddEventHandler('rs_balloon:passengerJoined', function(passengerName)
+    Core.NotifyLeft("Balloon", passengerName .. " joined your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
+end)
+
+RegisterNetEvent('rs_balloon:passengerLeft')
+AddEventHandler('rs_balloon:passengerLeft', function(passengerName)
+    Core.NotifyLeft("Balloon", passengerName .. " left your balloon", "menu_textures", "cross", 3000, "COLOR_YELLOW")
+end)
+
+RegisterNetEvent('rs_balloon:updatePassengerCount')
+AddEventHandler('rs_balloon:updatePassengerCount', function(count)
+    passengerCount = count
+end)
+
+RegisterNetEvent('rs_balloon:notOwnerControl')
+AddEventHandler('rs_balloon:notOwnerControl', function()
+    Core.NotifyLeft("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 3000, "COLOR_RED")
+end)
+
+-- Invite prompt handling
+Citizen.CreateThread(function()
+    while true do
+        if pendingInvite then
+            invitePromptGroup:handleEvents()
+            
+            local groupName = CreateVarString(10, 'LITERAL_STRING', "Balloon Invite from " .. pendingInvite.fromName)
+            PromptSetActiveGroupThisFrame(invitePromptGroup.group, groupName)
+            
+            if IsControlJustPressed(0, `INPUT_FRONTEND_ACCEPT`) then
+                TriggerServerEvent('rs_balloon:acceptInvite', pendingInvite.fromId)
+                pendingInvite = nil
+                Citizen.Wait(500)
+            elseif IsControlJustPressed(0, `INPUT_FRONTEND_CANCEL`) then
+                TriggerServerEvent('rs_balloon:declineInvite', pendingInvite.fromId)
+                pendingInvite = nil
+                Core.NotifyLeft("Balloon Invite", "Invite declined", "menu_textures", "cross", 3000, "COLOR_RED")
+                Citizen.Wait(500)
+            end
+            
+            Citizen.Wait(0)
+        else
+            Citizen.Wait(500)
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Damage System
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- Detect balloon damage
+AddEventHandler('gameEventTriggered', function(eventName, eventData)
+    if not balloon or not DoesEntityExist(balloon) then return end
+    
+    -- CEventNetworkEntityDamage structure: [victim, attacker, weaponInfoIndex, isDead, weaponInfoIndex2, hitComponent, weaponHash]
+    if eventName == 'CEventNetworkEntityDamage' then
+        local victim = eventData[1]
+        local attacker = eventData[2]
+        local isDead = eventData[4]
+        local weaponHash = eventData[7]
+        
+        if victim == balloon and currentBalloonNetId then
+            local damageAmount = 1
+            
+            TriggerServerEvent('rs_balloon:balloonDamaged', currentBalloonNetId, damageAmount)
+            balloonDamaged = true
+        end
+    end
+end)
+
+RegisterNetEvent('rs_balloon:balloonCrashing')
+AddEventHandler('rs_balloon:balloonCrashing', function()
+    isBalloonCrashing = true
+    Core.NotifyLeft("Balloon", "Balloon is damaged! Crashing!", "menu_textures", "cross", 5000, "COLOR_RED")
+    
+    PlaySoundFrontend("CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", true, 1)
+    
+    Citizen.CreateThread(function()
+        while isBalloonCrashing and balloon and DoesEntityExist(balloon) do
+            Citizen.Wait(0)
+        end
+        isBalloonCrashing = false
+    end)
+end)
+
+RegisterNetEvent('rs_balloon:damageStatusUpdated')
+AddEventHandler('rs_balloon:damageStatusUpdated', function(isDamaged)
+    balloonDamaged = isDamaged
+    if not isDamaged then
+        isBalloonCrashing = false
+        Core.NotifyLeft("Balloon", "Balloon repaired successfully!", "generic_textures", "tick", 3000, "COLOR_GREEN")
+    end
+end)
+
+-- Monitor owner death
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(1000)
+        
+        if balloon and DoesEntityExist(balloon) then
+            local playerPed = PlayerPedId()
+            local currentHealth = GetEntityHealth(playerPed)
+            
+            if balloonOwnerSource == GetPlayerServerId(PlayerId()) and currentBalloonNetId then
+                if lastPlayerHealth and currentHealth <= 0 and lastPlayerHealth > 0 then
+                    TriggerServerEvent('rs_balloon:ownerDied', currentBalloonNetId)
+                end
+                lastPlayerHealth = currentHealth
+            end
+        else
+            lastPlayerHealth = nil
         end
     end
 end)
