@@ -49,6 +49,7 @@ Thank you for your support! ❤️
 
 - **Buy & Own Balloons:** Players can purchase their own hot air balloons
 - **Rental System:** Temporary balloon rentals for short-term use
+- **Fuel Requirement:** Optional fuel consumption system with random usage (10-15 minutes per fuel can)
 - **Sell Balloons:** Ability to sell owned balloons back to the store
 - **Transfer System:** Transfer balloon ownership to other players
 - **Multiple Locations:** Balloon stores and rental points across the map
@@ -56,6 +57,7 @@ Thank you for your support! ❤️
 - **Time-Based Rentals:** Rental duration with automatic expiration
 - **Immersive Controls:** Realistic balloon control system
 - **Multi-Language Support:** English, French, Portuguese, German, Italian, Spanish, Romanian
+- **Multi-Framework Support:** LXRCore, RSG-Core, VORP, RedEM:RP, Standalone
 
 ## 📸 Screenshots
 
