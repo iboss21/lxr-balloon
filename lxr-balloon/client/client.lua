@@ -99,6 +99,27 @@ Citizen.CreateThread(function()
     end
 end)
 
+-- Ensure players in balloons can be damaged (no invincibility)
+Citizen.CreateThread(function()
+    while true do
+        local playerPed = PlayerPedId()
+        local vehiclePedIsIn = GetVehiclePedIsIn(playerPed, false)
+        
+        if vehiclePedIsIn ~= 0 and GetEntityModel(vehiclePedIsIn) == `hotairballoon01` then
+            -- Make sure player can be damaged
+            SetEntityCanBeDamaged(playerPed, true)
+            SetEntityInvincible(playerPed, false)
+            SetPlayerInvincible(PlayerId(), false)
+            
+            -- Make sure balloon vehicle doesn't block damage to player
+            SetEntityCanBeDamaged(vehiclePedIsIn, true)
+            SetEntityProofs(vehiclePedIsIn, false, false, false, false, false, false, false, false)
+        end
+        
+        Citizen.Wait(500)
+    end
+end)
+
 Citizen.CreateThread(function()
     local bv
     while true do
