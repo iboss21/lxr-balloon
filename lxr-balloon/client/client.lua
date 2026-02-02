@@ -406,6 +406,7 @@ function OpenInviteMenu()
     local nearbyPlayers = {}
     local playerPed = PlayerPedId()
     local playerCoords = GetEntityCoords(playerPed)
+    local inviteDistance = Config.PassengerSystem and Config.PassengerSystem.inviteDistance or 10.0
     
     for _, player in ipairs(GetActivePlayers()) do
         if player ~= PlayerId() then
@@ -413,7 +414,7 @@ function OpenInviteMenu()
             local targetCoords = GetEntityCoords(targetPed)
             local distance = #(playerCoords - targetCoords)
             
-            if distance < 50.0 then
+            if distance < inviteDistance then
                 local serverId = GetPlayerServerId(player)
                 local playerName = GetPlayerName(player)
                 table.insert(nearbyPlayers, {
