@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-02-02
+
+### ✨ New Features
+- **Fuel Requirement System**: Added optional fuel requirement for balloon rentals
+  - Configurable fuel item name (default: `balloon_fuel`)
+  - Random fuel consumption between min/max values for realistic gameplay
+  - Smart calculation: 1 fuel = 10-15 minutes of flight time
+  - Can be enabled/disabled via config
+  - Multi-framework inventory support
+
+### 🔧 Configuration Changes
+- Added `Config.FuelRequirement` section with the following options:
+  - `enabled` - Toggle fuel requirement on/off
+  - `itemName` - Set the fuel item name
+  - `minMinutesPerFuel` - Minimum flight time per fuel can
+  - `maxMinutesPerFuel` - Maximum flight time per fuel can
+
+### 🌍 Framework Support
+- Added `Framework.GetItemCount()` - Check player inventory for items
+- Added `Framework.RemoveItem()` - Remove items from player inventory
+- Full support for:
+  - LXRCore inventory system
+  - RSG-Core inventory system
+  - VORP inventory system
+  - RedEM:RP inventory system
+  - Standalone mode (fuel always available)
+
+### 🗣️ Translations
+- Added fuel-related messages to all 7 supported languages:
+  - English, Spanish, French, Portuguese (BR/PT), German, Italian, Romanian
+  - New keys: `NeedFuel`, `FuelCans`, `YouHave`
+
+### 📚 Documentation
+- Updated CONFIGURATION.md with fuel system documentation
+- Added example item configuration
+- Added framework compatibility notes
+
+### 🔄 Backward Compatibility
+- Fuel system is disabled by default to maintain compatibility
+- All existing functionality remains unchanged
+- No database changes required
+
+---
+
 ## [2.0.0] - 2026-02-02
 
 ### 🎨 Branding & Rebranding

@@ -40,7 +40,7 @@ lua54 'yes'
 -- ═══════════════════════════════════════════════════════════════════════════════
 author 'iBoss21 / The Lux Empire'
 description 'Hot Air Balloon System for The Land of Wolves 🐺 | Georgian RP'
-version '2.0.0'
+version '2.1.0'
 
 -- Original Author: riversafe (https://github.com/riversafe33)
 -- Modified & Branded by: iBoss21 / The Lux Empire for The Land of Wolves
