@@ -58,24 +58,28 @@
 
 ---
 
+---
+
 ## Security Verification
 
-### ✅ Name Protection (Dual Layer)
-- [x] Protection in fxmanifest.lua (Layer 1)
-- [x] Protection in config.lua (Layer 2)
+### ✅ Name Protection (Config.lua Implementation)
+- [x] Protection in config.lua (shared_script)
+- [x] NOT in fxmanifest.lua (allows fxmanifest to load cleanly)
 - [x] Clear error message when name is wrong
 - [x] Instructions provided to fix
-- [x] Script will not start if renamed
+- [x] Script will not run if renamed
 
 ### ✅ Name Protection Test Cases
 ```lua
 Expected: lxr-balloon
 - Test 1: lxr-balloon ✅ Should work
-- Test 2: rs_balloon ❌ Should fail with error
-- Test 3: balloon ❌ Should fail with error
-- Test 4: lxr-balloons ❌ Should fail with error
+- Test 2: rs_balloon ❌ Should fail with error from config.lua
+- Test 3: balloon ❌ Should fail with error from config.lua
+- Test 4: lxr-balloons ❌ Should fail with error from config.lua
 - Test 5: LXR-Balloon ❌ Should fail (case sensitive)
 ```
+
+**Note:** The safeguard runs when config.lua loads (as a shared_script), not during fxmanifest parsing.
 
 ---
 
@@ -177,7 +181,7 @@ cp -r lxr-balloon /server/resources/
 # Test 2: Wrong name (should fail)
 mv lxr-balloon wrong-name
 # Start server
-# Expected: ❌ Error message about name violation
+# Expected: ❌ Error message about name violation from config.lua
 ```
 
 ### In-Game Tests

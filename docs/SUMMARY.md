@@ -10,8 +10,8 @@ The LXR Balloon System has been professionally rebranded for **The Land of Wolve
 
 ### 1. Folder & Resource Naming
 - ✅ Renamed `rs_balloon` → `lxr-balloon`
-- ✅ Added resource name protection in fxmanifest.lua
-- ✅ Added runtime name validation in config.lua
+- ✅ Resource name protection safeguard in config.lua (NOT in fxmanifest)
+- ✅ Runtime name validation when config loads
 - ✅ Script will not run if renamed (intentional safeguard)
 
 ### 2. Branding & Attribution
@@ -67,7 +67,7 @@ Created comprehensive documentation suite in `docs/` folder:
 - ✅ Maintained all original functionality
 
 ### 7. FXManifest.lua
-- ✅ Added resource name protection (safeguard)
+- ✅ Removed resource name protection from fxmanifest (safeguard moved to config.lua instead)
 - ✅ Updated author information
 - ✅ Added original author credit
 - ✅ Professional header comments
@@ -94,28 +94,21 @@ To maintain script integrity and minimize changes:
 ## 🔒 Security Features
 
 ### Resource Name Protection
-The script includes **dual-layer protection** to prevent renaming:
+The script includes a **safeguard in config.lua** (NOT in fxmanifest) to prevent renaming:
 
-**Layer 1: FXManifest.lua**
+**Implementation: Config.lua**
 ```lua
 local REQUIRED_RESOURCE_NAME = "lxr-balloon"
 local currentResourceName = GetCurrentResourceName()
 
 if currentResourceName ~= REQUIRED_RESOURCE_NAME then
-    error("Resource name violation detected!")
-    return
-end
-```
-
-**Layer 2: Config.lua**
-```lua
-local REQUIRED_RESOURCE_NAME = "lxr-balloon"
-if GetCurrentResourceName() ~= REQUIRED_RESOURCE_NAME then
     error("Critical error: Resource name mismatch!")
 end
 ```
 
 **Result:** Script will **NOT start** if folder is renamed. Displays clear error message with fix instructions.
+
+**Note:** The safeguard is implemented in config.lua (loaded as a shared_script) rather than fxmanifest.lua, allowing fxmanifest to load cleanly while still protecting the resource name.
 
 ---
 
@@ -124,7 +117,6 @@ end
 ```
 lxr-balloon/
 ├── lxr-balloon/                  # Main resource folder (MUST be named this)
-│   ├── client/                   # Client-side scripts (unchanged)
 │   │   ├── client.lua
 │   │   ├── utils.lua
 │   │   └── balloonanimations.lua
@@ -346,7 +338,7 @@ This rebranding follows professional development standards:
 ✅ **Professional rebranding** complete  
 ✅ **Comprehensive documentation** created  
 ✅ **Multi-framework support** implemented  
-✅ **Name protection** safeguards added  
+✅ **Name protection** safeguard in config.lua (not fxmanifest)  
 ✅ **Original author** properly credited  
 ✅ **Zero breaking changes** to core functionality  
 ✅ **Developer-friendly** API documentation  

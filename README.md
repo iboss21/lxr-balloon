@@ -75,7 +75,7 @@ Thank you for your support! ❤️
 
 **⚠️ IMPORTANT: Resource Name Protection**
 
-This resource **MUST** be named `lxr-balloon`. The script includes safeguards that prevent it from running if renamed. This protects the branding and ensures compatibility.
+This resource **MUST** be named `lxr-balloon`. The script includes a safeguard in config.lua that prevents it from running if renamed. This protects the branding and ensures compatibility.
 
 1. Ensure you have the required dependencies installed
 2. Place `lxr-balloon` folder in your resources directory
