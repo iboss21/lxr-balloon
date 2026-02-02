@@ -9,6 +9,9 @@ Framework = {}
 Framework.Core = nil
 Framework.Type = nil
 
+-- Constants
+local STANDALONE_UNLIMITED_ITEMS = 999  -- Standalone mode has no inventory system, bypass all item checks
+
 -- Framework detection function
 -- Note: Framework type names match Config.FrameworkSettings keys:
 --   'lxrcore' (no hyphen) and 'rsg-core' (with hyphen) match the config structure
@@ -193,8 +196,8 @@ function Framework.GetItemCount(source, itemName)
         local item = User.getInventoryItem(itemName)
         return item and item.count or 0
     else
-        -- Standalone mode - no inventory system
-        return 999
+        -- Standalone mode - no inventory system, return unlimited items
+        return STANDALONE_UNLIMITED_ITEMS
     end
 end
 

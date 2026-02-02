@@ -139,12 +139,14 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
             return
         end
 
-        -- Remove fuel if requirement is enabled (using the previously calculated amount)
+        -- Remove currency first to ensure player can afford rental
+        Character.removeCurrency(0, cost)
+        
+        -- Remove fuel after successful payment (using the previously calculated amount)
         if Config.FuelRequirement.enabled and requiredFuel > 0 then
             Framework.RemoveItem(src, Config.FuelRequirement.itemName, requiredFuel)
         end
-
-        Character.removeCurrency(0, cost)
+        
         Framework.NotifyLeft(src, T.Tittle, T.BalloonRented .. " " .. Config.BallonUseTime .. " " .. T.Minutes, "generic_textures", "tick", 4000, "COLOR_GREEN")
 
         exports.oxmysql:execute("INSERT INTO balloon_rentals (user_id, character_id, duration) VALUES (?, ?, ?)", {
