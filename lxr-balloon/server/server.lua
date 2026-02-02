@@ -405,16 +405,9 @@ AddEventHandler('rs_balloon:trackBalloonOwner', function(balloonNetId)
     balloonPassengers[balloonNetId] = {}
     balloonDamage[balloonNetId] = {
         hits = 0,
-        maxHits = math.random(10, 15),
+        maxHits = math.random(Config.DamageSystem.arrowHitsToDestroy, Config.DamageSystem.arrowHitsToDestroyMax),
         isDamaged = false
     }
-    
-    -- Store in database
-    exports.oxmysql:execute('INSERT INTO balloon_ownership (balloon_id, owner_id, owner_charid) VALUES (?, ?, ?)', {
-        balloonNetId,
-        Character.identifier,
-        Character.charIdentifier
-    })
 end)
 
 RegisterNetEvent('rs_balloon:invitePassenger')
@@ -552,7 +545,7 @@ AddEventHandler('rs_balloon:balloonDamaged', function(balloonNetId, damageAmount
     if not balloonDamage[balloonNetId] then
         balloonDamage[balloonNetId] = {
             hits = 0,
-            maxHits = math.random(10, 15),
+            maxHits = math.random(Config.DamageSystem.arrowHitsToDestroy, Config.DamageSystem.arrowHitsToDestroyMax),
             isDamaged = false
         }
     end
@@ -562,13 +555,17 @@ AddEventHandler('rs_balloon:balloonDamaged', function(balloonNetId, damageAmount
     if balloonDamage[balloonNetId].hits >= balloonDamage[balloonNetId].maxHits then
         balloonDamage[balloonNetId].isDamaged = true
         
-        exports.oxmysql:execute('INSERT INTO balloon_damage (balloon_id, damage_hits, is_damaged) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE damage_hits = ?, is_damaged = ?', {
-            balloonNetId,
-            balloonDamage[balloonNetId].hits,
-            1,
-            balloonDamage[balloonNetId].hits,
-            1
-        })
+        if balloonOwners[balloonNetId] then
+            exports.oxmysql:execute('INSERT INTO balloon_damage (balloon_owner_id, balloon_owner_charid, balloon_net_id, hit_count, is_damaged, damage_time) VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE hit_count = ?, is_damaged = ?, damage_time = NOW()', {
+                balloonOwners[balloonNetId].identifier,
+                balloonOwners[balloonNetId].charid,
+                balloonNetId,
+                balloonDamage[balloonNetId].hits,
+                1,
+                balloonDamage[balloonNetId].hits,
+                1
+            })
+        end
         
         if balloonOwners[balloonNetId] then
             local ownerSrc = balloonOwners[balloonNetId].owner
@@ -654,44 +651,39 @@ AddEventHandler('rs_balloon:repairBalloon', function(balloonNetId)
         return
     end
     
-    if not Config.RepairSystem or not Config.RepairSystem.enabled then
+    if not Config.DamageSystem or not Config.DamageSystem.enabled then
         Framework.NotifyLeft(src, T.Tittle, "Repair system is not enabled", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
-    local repairCost = Config.RepairSystem.repairCost or 50
-    local woodRequired = Config.RepairSystem.woodRequired or 5
-    local clothRequired = Config.RepairSystem.clothRequired or 3
+    local repairCost = Config.DamageSystem.repairMoney or 50
     
     if Character.money < repairCost then
         Framework.NotifyLeft(src, T.Tittle, "Not enough money. Need $" .. repairCost, "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
-    local woodCount = Framework.GetItemCount(src, Config.RepairSystem.woodItem or "wood")
-    local clothCount = Framework.GetItemCount(src, Config.RepairSystem.clothItem or "cloth")
-    
-    if woodCount < woodRequired then
-        Framework.NotifyLeft(src, T.Tittle, "Not enough wood. Need " .. woodRequired .. " (Have " .. woodCount .. ")", "menu_textures", "cross", 4000, "COLOR_RED")
-        return
-    end
-    
-    if clothCount < clothRequired then
-        Framework.NotifyLeft(src, T.Tittle, "Not enough cloth. Need " .. clothRequired .. " (Have " .. clothCount .. ")", "menu_textures", "cross", 4000, "COLOR_RED")
-        return
+    for _, item in ipairs(Config.DamageSystem.repairItems) do
+        local itemCount = Framework.GetItemCount(src, item.name)
+        if itemCount < item.amount then
+            Framework.NotifyLeft(src, T.Tittle, "Not enough " .. item.name .. ". Need " .. item.amount .. " (Have " .. itemCount .. ")", "menu_textures", "cross", 4000, "COLOR_RED")
+            return
+        end
     end
     
     Character.removeCurrency(0, repairCost)
-    Framework.RemoveItem(src, Config.RepairSystem.woodItem or "wood", woodRequired)
-    Framework.RemoveItem(src, Config.RepairSystem.clothItem or "cloth", clothRequired)
+    
+    for _, item in ipairs(Config.DamageSystem.repairItems) do
+        Framework.RemoveItem(src, item.name, item.amount)
+    end
     
     balloonDamage[balloonNetId] = {
         hits = 0,
-        maxHits = math.random(10, 15),
+        maxHits = math.random(Config.DamageSystem.arrowHitsToDestroy, Config.DamageSystem.arrowHitsToDestroyMax),
         isDamaged = false
     }
     
-    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_id = ?', { balloonNetId })
+    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_net_id = ?', { balloonNetId })
     
     TriggerClientEvent('rs_balloon:balloonRepaired', src, balloonNetId)
     Framework.NotifyLeft(src, T.Tittle, "Balloon repaired successfully!", "generic_textures", "tick", 4000, "COLOR_GREEN")
@@ -706,8 +698,7 @@ function cleanupBalloonData(balloonNetId)
     balloonPassengers[balloonNetId] = nil
     balloonDamage[balloonNetId] = nil
     
-    exports.oxmysql:execute('DELETE FROM balloon_ownership WHERE balloon_id = ?', { balloonNetId })
-    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_id = ?', { balloonNetId })
+    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_net_id = ?', { balloonNetId })
 end
 
 RegisterNetEvent('rs_balloon:cleanupBalloon')
@@ -724,8 +715,6 @@ AddEventHandler("onResourceStart", function(resourceName)
     pendingInvites = {}
     
     exports.oxmysql:execute("DELETE FROM balloon_rentals", {}, function()
-    end)
-    exports.oxmysql:execute("DELETE FROM balloon_ownership", {}, function()
     end)
     exports.oxmysql:execute("DELETE FROM balloon_damage", {}, function()
     end)
