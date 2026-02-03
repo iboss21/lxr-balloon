@@ -859,6 +859,49 @@ AddEventHandler('rs_balloon:balloonRepaired', function(balloonNetId)
     end
 end)
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Visual Effects for Damaged Balloons
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- Particle effect thread for damaged balloons
+Citizen.CreateThread(function()
+    while true do
+        if balloon and DoesEntityExist(balloon) and (balloonDamaged or isBalloonCrashing) then
+            -- Get balloon position
+            local balloonPos = GetEntityCoords(balloon)
+            
+            -- Request particle effect dictionary
+            if not HasNamedPtfxAssetLoaded("core") then
+                RequestNamedPtfxAsset("core")
+                while not HasNamedPtfxAssetLoaded("core") do
+                    Citizen.Wait(0)
+                end
+            end
+            
+            UseParticleFxAsset("core")
+            
+            -- Create smoke effect based on damage level
+            if isBalloonCrashing then
+                -- Heavy smoke when crashing
+                local particle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 2.0, false, false, false, false)
+                SetParticleFxLoopedAlpha(particle, 0.8)
+                Citizen.Wait(100)
+                StopParticleFxLooped(particle, false)
+            elseif balloonDamaged then
+                -- Light smoke when damaged
+                local particle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 1.0, false, false, false, false)
+                SetParticleFxLoopedAlpha(particle, 0.4)
+                Citizen.Wait(200)
+                StopParticleFxLooped(particle, false)
+            end
+            
+            Citizen.Wait(500)
+        else
+            Citizen.Wait(1000)
+        end
+    end
+end)
+
 -- Invite prompt handling
 Citizen.CreateThread(function()
     while true do
