@@ -585,7 +585,7 @@ AddEventHandler('rs_balloon:balloonDamaged', function(balloonNetId, damageAmount
         
         if balloonOwners[balloonNetId] then
             local ownerSrc = balloonOwners[balloonNetId].owner
-            TriggerClientEvent('rs_balloon:updateDamage', ownerSrc, balloonNetId, damagePercent)
+            TriggerClientEvent('rs_balloon:updateDamage', ownerSrc, balloonNetId, balloonDamage[balloonNetId].hits, balloonDamage[balloonNetId].maxHits, balloonDamage[balloonNetId].isDamaged)
         end
     end
 end)
@@ -616,15 +616,18 @@ end)
 RegisterNetEvent('rs_balloon:checkBalloonDamage')
 AddEventHandler('rs_balloon:checkBalloonDamage', function(balloonNetId)
     local src = source
-    local isDamaged = false
-    local damagePercent = 0
+    local damageInfo = nil
     
     if balloonDamage[balloonNetId] then
-        isDamaged = balloonDamage[balloonNetId].isDamaged or balloonDamage[balloonNetId].hits > 0
-        damagePercent = math.floor((balloonDamage[balloonNetId].hits / balloonDamage[balloonNetId].maxHits) * 100)
+        damageInfo = {
+            isDamaged = balloonDamage[balloonNetId].isDamaged or balloonDamage[balloonNetId].hits > 0,
+            hits = balloonDamage[balloonNetId].hits,
+            maxHits = balloonDamage[balloonNetId].maxHits,
+            damagePercent = math.floor((balloonDamage[balloonNetId].hits / balloonDamage[balloonNetId].maxHits) * 100)
+        }
     end
     
-    TriggerClientEvent('rs_balloon:receiveDamageStatus', src, isDamaged, damagePercent)
+    TriggerClientEvent('rs_balloon:receiveDamageStatus', src, damageInfo)
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════

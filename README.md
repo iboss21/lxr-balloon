@@ -90,8 +90,9 @@ Thank you for your support! ❤️
 - **Smart Prompts:** Context-sensitive UI prompts
 
 ### 🌍 Multi-Language Support
-Complete translations in 7 languages:
+Complete translations in 9 languages:
 - English 🇬🇧
+- Georgian 🇬🇪
 - Spanish 🇪🇸
 - French 🇫🇷
 - Portuguese (BR) 🇧🇷

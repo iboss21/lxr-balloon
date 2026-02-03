@@ -153,7 +153,8 @@ Citizen.CreateThread(function()
 
                 -- Apply crash effect if balloon is crashing
                 if isBalloonCrashing then
-                    v2 = vector3(v2.x * 0.9, v2.y * 0.9, -0.5)
+                    local crashSpeed = Config.DamageSystem.crashDescentSpeed or 0.5
+                    v2 = vector3(v2.x * 0.9, v2.y * 0.9, -crashSpeed)
                     SetEntityVelocity(balloon, v2)
                     Citizen.Wait(0)
                 else
@@ -759,6 +760,165 @@ end)
 RegisterNetEvent('rs_balloon:notOwnerControl')
 AddEventHandler('rs_balloon:notOwnerControl', function()
     Core.NotifyLeft("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 3000, "COLOR_RED")
+end)
+
+-- Passenger added notification (for owner)
+RegisterNetEvent('rs_balloon:passengerAdded')
+AddEventHandler('rs_balloon:passengerAdded', function(passengerSrc, balloonNetId)
+    passengerCount = passengerCount + 1
+    Core.NotifyLeft("Balloon", "Passenger added to your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
+end)
+
+-- Notify passenger they joined
+RegisterNetEvent('rs_balloon:youArePassenger')
+AddEventHandler('rs_balloon:youArePassenger', function(ownerSrc, balloonNetId)
+    balloonOwnerSource = ownerSrc
+    currentBalloonNetId = balloonNetId
+    Core.NotifyLeft("Balloon", T.InviteAccepted, "generic_textures", "tick", 3000, "COLOR_GREEN")
+end)
+
+-- Passenger removed from balloon
+RegisterNetEvent('rs_balloon:removedFromBalloon')
+AddEventHandler('rs_balloon:removedFromBalloon', function(balloonNetId)
+    if currentBalloonNetId == balloonNetId then
+        balloonOwnerSource = nil
+        currentBalloonNetId = nil
+        Core.NotifyLeft("Balloon", "You were removed from the balloon", "menu_textures", "cross", 3000, "COLOR_RED")
+    end
+end)
+
+-- Balloon destroyed notification
+RegisterNetEvent('rs_balloon:balloonDestroyed')
+AddEventHandler('rs_balloon:balloonDestroyed', function(balloonNetId)
+    if currentBalloonNetId == balloonNetId then
+        Core.NotifyLeft("Balloon", "The balloon has been destroyed!", "menu_textures", "cross", 5000, "COLOR_RED")
+        if balloon and DoesEntityExist(balloon) then
+            SetEntityAsNoLongerNeeded(balloon)
+            DeleteEntity(balloon)
+        end
+        balloon = nil
+        spawn_balloon = nil
+        currentBalloonNetId = nil
+        balloonOwnerSource = nil
+        isBalloonCrashing = false
+        balloonDamaged = false
+    end
+end)
+
+-- Trigger crash mechanics
+RegisterNetEvent('rs_balloon:triggerCrash')
+AddEventHandler('rs_balloon:triggerCrash', function(balloonNetId)
+    if currentBalloonNetId == balloonNetId or (balloon and NetworkGetNetworkIdFromEntity(balloon) == balloonNetId) then
+        isBalloonCrashing = true
+        balloonDamaged = true
+        Core.NotifyLeft("Balloon", T.BalloonCrashing, "menu_textures", "cross", 5000, "COLOR_RED")
+        
+        -- Play crash sound
+        PlaySoundFrontend("CHECKPOINT_MISSED", "HUD_MINI_GAME_SOUNDSET", true, 1)
+        
+        -- Apply crash descent
+        Citizen.CreateThread(function()
+            while isBalloonCrashing and balloon and DoesEntityExist(balloon) do
+                local velocity = GetEntityVelocity(balloon)
+                local crashSpeed = Config.DamageSystem.crashDescentSpeed or 0.5
+                SetEntityVelocity(balloon, velocity.x * 0.9, velocity.y * 0.9, -crashSpeed)
+                Citizen.Wait(100)
+            end
+        end)
+    end
+end)
+
+-- Update damage status
+RegisterNetEvent('rs_balloon:updateDamage')
+AddEventHandler('rs_balloon:updateDamage', function(balloonNetId, hitCount, maxHits, isDamaged)
+    if currentBalloonNetId == balloonNetId then
+        balloonDamaged = isDamaged
+        if isDamaged then
+            Core.NotifyLeft("Balloon", string.format("%s (%d/%d)", T.BalloonHit, hitCount, maxHits), "menu_textures", "cross", 3000, "COLOR_ORANGE")
+        end
+    end
+end)
+
+-- Receive damage status
+RegisterNetEvent('rs_balloon:receiveDamageStatus')
+AddEventHandler('rs_balloon:receiveDamageStatus', function(damageInfo)
+    if damageInfo then
+        local statusMsg = damageInfo.isDamaged and T.DamageStatusDamaged or T.DamageStatusHealthy
+        local maxHitsValue = damageInfo.maxHits or Config.DamageSystem.arrowHitsToDestroyMax or 15
+        local hitMsg = string.format("%s %d/%d", T.HitCounter, damageInfo.hits or 0, maxHitsValue)
+        Core.NotifyLeft("Balloon Status", statusMsg .. "\n" .. hitMsg, "generic_textures", "tick", 5000, "COLOR_BLUE")
+    end
+end)
+
+-- Balloon repaired notification
+RegisterNetEvent('rs_balloon:balloonRepaired')
+AddEventHandler('rs_balloon:balloonRepaired', function(balloonNetId)
+    if currentBalloonNetId == balloonNetId then
+        balloonDamaged = false
+        isBalloonCrashing = false
+        Core.NotifyLeft("Balloon", T.BalloonRepaired, "generic_textures", "tick", 3000, "COLOR_GREEN")
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Visual Effects for Damaged Balloons
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+-- Particle effect thread for damaged balloons
+Citizen.CreateThread(function()
+    local activeParticle = nil
+    local lastDamageState = nil
+    
+    while true do
+        if balloon and DoesEntityExist(balloon) and (balloonDamaged or isBalloonCrashing) then
+            local currentState = isBalloonCrashing and "crashing" or (balloonDamaged and "damaged" or nil)
+            
+            -- Only update particles if state changed
+            if currentState ~= lastDamageState then
+                -- Clean up old particle
+                if activeParticle then
+                    StopParticleFxLooped(activeParticle, false)
+                    activeParticle = nil
+                end
+                
+                -- Request particle effect dictionary
+                if not HasNamedPtfxAssetLoaded("core") then
+                    RequestNamedPtfxAsset("core")
+                    while not HasNamedPtfxAssetLoaded("core") do
+                        Citizen.Wait(0)
+                    end
+                end
+                
+                UseParticleFxAsset("core")
+                
+                -- Get balloon position
+                local balloonPos = GetEntityCoords(balloon)
+                
+                -- Create appropriate smoke effect
+                if currentState == "crashing" then
+                    -- Heavy smoke when crashing
+                    activeParticle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 2.0, false, false, false, false)
+                    SetParticleFxLoopedAlpha(activeParticle, 0.8)
+                elseif currentState == "damaged" then
+                    -- Light smoke when damaged
+                    activeParticle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 1.0, false, false, false, false)
+                    SetParticleFxLoopedAlpha(activeParticle, 0.4)
+                end
+                
+                lastDamageState = currentState
+            end
+            
+            Citizen.Wait(500)
+        else
+            -- Clean up particle when balloon is no longer damaged
+            if activeParticle then
+                StopParticleFxLooped(activeParticle, false)
+                activeParticle = nil
+            end
+            lastDamageState = nil
+            Citizen.Wait(1000)
+        end
+    end
 end)
 
 -- Invite prompt handling
