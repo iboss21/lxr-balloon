@@ -844,7 +844,8 @@ RegisterNetEvent('rs_balloon:receiveDamageStatus')
 AddEventHandler('rs_balloon:receiveDamageStatus', function(damageInfo)
     if damageInfo then
         local statusMsg = damageInfo.isDamaged and T.DamageStatusDamaged or T.DamageStatusHealthy
-        local hitMsg = string.format("%s %d/%d", T.HitCounter, damageInfo.hits or 0, damageInfo.maxHits or 15)
+        local maxHitsValue = damageInfo.maxHits or Config.DamageSystem.arrowHitsToDestroyMax or 15
+        local hitMsg = string.format("%s %d/%d", T.HitCounter, damageInfo.hits or 0, maxHitsValue)
         Core.NotifyLeft("Balloon Status", statusMsg .. "\n" .. hitMsg, "generic_textures", "tick", 5000, "COLOR_BLUE")
     end
 end)
@@ -865,38 +866,56 @@ end)
 
 -- Particle effect thread for damaged balloons
 Citizen.CreateThread(function()
+    local activeParticle = nil
+    local lastDamageState = nil
+    
     while true do
         if balloon and DoesEntityExist(balloon) and (balloonDamaged or isBalloonCrashing) then
-            -- Get balloon position
-            local balloonPos = GetEntityCoords(balloon)
+            local currentState = isBalloonCrashing and "crashing" or (balloonDamaged and "damaged" or nil)
             
-            -- Request particle effect dictionary
-            if not HasNamedPtfxAssetLoaded("core") then
-                RequestNamedPtfxAsset("core")
-                while not HasNamedPtfxAssetLoaded("core") do
-                    Citizen.Wait(0)
+            -- Only update particles if state changed
+            if currentState ~= lastDamageState then
+                -- Clean up old particle
+                if activeParticle then
+                    StopParticleFxLooped(activeParticle, false)
+                    activeParticle = nil
                 end
-            end
-            
-            UseParticleFxAsset("core")
-            
-            -- Create smoke effect based on damage level
-            if isBalloonCrashing then
-                -- Heavy smoke when crashing
-                local particle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 2.0, false, false, false, false)
-                SetParticleFxLoopedAlpha(particle, 0.8)
-                Citizen.Wait(100)
-                StopParticleFxLooped(particle, false)
-            elseif balloonDamaged then
-                -- Light smoke when damaged
-                local particle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 1.0, false, false, false, false)
-                SetParticleFxLoopedAlpha(particle, 0.4)
-                Citizen.Wait(200)
-                StopParticleFxLooped(particle, false)
+                
+                -- Request particle effect dictionary
+                if not HasNamedPtfxAssetLoaded("core") then
+                    RequestNamedPtfxAsset("core")
+                    while not HasNamedPtfxAssetLoaded("core") do
+                        Citizen.Wait(0)
+                    end
+                end
+                
+                UseParticleFxAsset("core")
+                
+                -- Get balloon position
+                local balloonPos = GetEntityCoords(balloon)
+                
+                -- Create appropriate smoke effect
+                if currentState == "crashing" then
+                    -- Heavy smoke when crashing
+                    activeParticle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 2.0, false, false, false, false)
+                    SetParticleFxLoopedAlpha(activeParticle, 0.8)
+                elseif currentState == "damaged" then
+                    -- Light smoke when damaged
+                    activeParticle = StartParticleFxLoopedAtCoord("ent_amb_smoke_foundry", balloonPos.x, balloonPos.y, balloonPos.z + 2.0, 0.0, 0.0, 0.0, 1.0, false, false, false, false)
+                    SetParticleFxLoopedAlpha(activeParticle, 0.4)
+                end
+                
+                lastDamageState = currentState
             end
             
             Citizen.Wait(500)
         else
+            -- Clean up particle when balloon is no longer damaged
+            if activeParticle then
+                StopParticleFxLooped(activeParticle, false)
+                activeParticle = nil
+            end
+            lastDamageState = nil
             Citizen.Wait(1000)
         end
     end
