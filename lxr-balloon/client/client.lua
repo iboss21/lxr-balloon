@@ -252,6 +252,141 @@ local stand = { x = 0, y = 0, z = 0 }
 local T = Translation.Langs[Config.Lang]
 local _BalloonPrompt
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Dedicated Dealer Prompt (Config.DealerLocation)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local DealerGroup = GetRandomIntInRange(0, 0xffffff)
+local _DealerPrompt
+
+local function SetupDealerPrompt()
+    Citizen.CreateThread(function()
+        local str = T.DealerPrompt or "Balloon Dealer (Purchase Only)"
+        _DealerPrompt = Citizen.InvokeNative(0x04F97DE45A519419)
+        PromptSetControlAction(_DealerPrompt, 0x760A9C6F)
+        str = CreateVarString(10, 'LITERAL_STRING', str)
+        PromptSetText(_DealerPrompt, str)
+        PromptSetEnabled(_DealerPrompt, true)
+        PromptSetVisible(_DealerPrompt, true)
+        PromptSetStandardMode(_DealerPrompt, true)
+        PromptSetGroup(_DealerPrompt, DealerGroup)
+        PromptRegisterEnd(_DealerPrompt)
+        PromptSetPriority(_DealerPrompt, true)
+    end)
+end
+
+-- Dealer zone detection & interaction
+Citizen.CreateThread(function()
+    if not Config.DealerLocation or #Config.DealerLocation == 0 then return end
+
+    SetupDealerPrompt()
+
+    -- Create blips and NPCs for each dealer location
+    for _, dealer in ipairs(Config.DealerLocation) do
+        local blip = N_0x554d9d53f696d002(1664425300, dealer.coords.x, dealer.coords.y, dealer.coords.z)
+        SetBlipSprite(blip, dealer.sprite, 1)
+        SetBlipScale(blip, 0.2)
+        Citizen.InvokeNative(0x9CB1A1623062F402, blip, dealer.name)
+
+        if dealer.npcCoords then
+            TriggerEvent("rs_balloon:CreateNPC", dealer.npcCoords)
+        end
+    end
+
+    while true do
+        local playerCoords = GetEntityCoords(PlayerPedId())
+        local inDealerZone = false
+
+        for _, dealer in ipairs(Config.DealerLocation) do
+            local dist = GetDistanceBetweenCoords(dealer.coords.x, dealer.coords.y, dealer.coords.z, playerCoords, false)
+            if dist < 2.0 then
+                inDealerZone = true
+
+                local groupLabel = CreateVarString(10, 'LITERAL_STRING', T.DealerShop or "Balloon Dealer")
+                PromptSetActiveGroupThisFrame(DealerGroup, groupLabel)
+                PromptSetEnabled(_DealerPrompt, true)
+                PromptSetVisible(_DealerPrompt, true)
+
+                if PromptHasStandardModeCompleted(_DealerPrompt) then
+                    PromptSetEnabled(_DealerPrompt, false)
+                    PromptSetVisible(_DealerPrompt, false)
+                    TriggerServerEvent('rs_balloon:checkOwnedDealer')
+                    Citizen.Wait(500)
+                end
+                break
+            end
+        end
+
+        if not inDealerZone then
+            PromptSetEnabled(_DealerPrompt, false)
+            PromptSetVisible(_DealerPrompt, false)
+        end
+
+        Citizen.Wait(inDealerZone and 5 or 500)
+    end
+end)
+
+-- Dealer menu event – purchase only
+RegisterNetEvent('rs_balloon:openDealerMenu')
+AddEventHandler('rs_balloon:openDealerMenu', function(hasBalloon)
+    MenuData.CloseAll()
+    local elements = {}
+
+    if not hasBalloon then
+        table.insert(elements, { label = T.Buyballon, value = 'buy', desc = T.Desc1 })
+    else
+        table.insert(elements, { label = T.Property, value = 'info', desc = T.DealerAlreadyOwned or "You already own a hot air balloon" })
+    end
+
+    MenuData.Open('default', GetCurrentResourceName(), 'vorp_menu',
+    {
+        title    = T.DealerShop or "Balloon Dealer",
+        subtext  = T.DealerBuyOnly or "Purchase only",
+        align    = 'top-right',
+        elements = elements,
+    },
+    function(data, menu)
+        if data.current.value == "buy" then
+            OpenBuyBallonsMenu()
+        end
+        menu.close()
+    end,
+    function(data, menu)
+        menu.close()
+    end)
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Maximum Altitude Enforcement (Config.MaxAltitude)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+Citizen.CreateThread(function()
+    if not Config.MaxAltitude or Config.MaxAltitude <= 0 then return end
+
+    local lastNotifyTime = 0
+
+    while true do
+        if balloon and DoesEntityExist(balloon) then
+            local pos = GetEntityCoords(balloon)
+            if pos.z >= Config.MaxAltitude then
+                local vel = GetEntityVelocity(balloon)
+                if vel.z > 0 then
+                    SetEntityVelocity(balloon, vel.x, vel.y, -0.1)
+                end
+                -- Notify at most once every 3 seconds
+                local now = GetGameTimer()
+                if (now - lastNotifyTime) >= 3000 then
+                    Core.NotifyLeft(T.Tittle, T.AltitudeLimit or "Maximum altitude reached!", "menu_textures", "cross", 3000, "COLOR_ORANGE")
+                    lastNotifyTime = now
+                end
+            end
+            Citizen.Wait(250)
+        else
+            Citizen.Wait(1000)
+        end
+    end
+end)
+
 function BalloonPrompt()
     Citizen.CreateThread(function()
         local str = T.Shop

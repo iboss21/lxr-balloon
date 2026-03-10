@@ -296,6 +296,7 @@ Config.NPC = {
         vector4(-1843.4991455078125, -431.02191162109375, 158.57522583007812, 153.76),  -- Strawberry Npc
         vector4(-839.0341796875, -1218.6031494140625, 42.39957809448242, 12.37),        -- Blackwater Npc
         vector4(-397.655517578125, 715.9544677734375, 114.88623809814453, 109.31),      -- Valentine Rental Npc
+        -- NOTE: Dealer NPC coords are defined inside Config.DealerLocation below
     }
 }
 
@@ -320,5 +321,84 @@ Config.Globo = {
            ['Name'] = "Hot Air Balloon", -- Change it to your language
            ['Price'] = 1250,               -- Sale price
         }
+    },
+    [2] = {
+        ['Text'] = "Deluxe Hot Air Balloon",
+        ['Param'] = {
+            ['Name'] = "Deluxe Hot Air Balloon",
+            ['Price'] = 2500,
+        }
+    },
+    [3] = {
+        ['Text'] = "Luxury Hot Air Balloon",
+        ['Param'] = {
+            ['Name'] = "Luxury Hot Air Balloon",
+            ['Price'] = 5000,
+        }
+    },
+}
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ████████████████████████ JOB RESTRICTION SETTINGS ██████████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+--[[
+    Set which jobs are allowed to purchase/rent balloons.
+    Use "all" as the only entry to grant access to every player regardless of job.
+    Example with job whitelist: Config.AllowedJobs = { "farmer", "hunter", "trader" }
+]]
+
+Config.AllowedJobs = {
+    "all", -- "all" allows every player; replace with specific job names to restrict access
+}
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ████████████████████████ FLIGHT LIMIT SETTINGS ██████████████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+-- Maximum altitude (Z coordinate) the balloon is allowed to reach.
+-- The balloon will be gently pushed back down when this ceiling is hit.
+-- Set to 0 to disable the altitude cap entirely.
+Config.MaxAltitude = 500.0
+
+-- Weather effects on balloon flight speed (multipliers applied to Config.BallonPrice etc.)
+-- Requires Config.WeatherEffects.enabled = true to take effect.
+-- Note: These multipliers are configuration values only. Add your own weather-check
+-- logic in client.lua if you want to apply them at runtime.
+Config.WeatherEffects = {
+    enabled      = false,  -- Master switch; set true to enable weather-based speed changes
+    blizzard     = { speedMultiplier = 0.50 },
+    thunder      = { speedMultiplier = 0.70 },
+    rain         = { speedMultiplier = 0.85 },
+    fog          = { speedMultiplier = 0.90 },
+    overcast     = { speedMultiplier = 0.95 },
+    clouds       = { speedMultiplier = 1.00 },
+    clear        = { speedMultiplier = 1.00 },
+}
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ██████████████ DEDICATED BALLOON DEALER LOCATION ████████████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+--[[
+    A dedicated purchase-only location where players can ONLY buy a balloon.
+    Unlike the general Config.Marker shops (which also allow selling, transferring,
+    and repairing), the Dealer shows a streamlined buy-only menu.
+
+    Each entry supports:
+        name      – Blip / menu title shown to the player
+        sprite    – Blip sprite hash
+        coords    – Player interaction trigger (vector3)
+        spawn     – Where the balloon vehicle spawns after purchase (vector3)
+        npcCoords – NPC position & heading (vector4); set to nil to skip NPC
+]]
+
+Config.DealerLocation = {
+    {
+        name      = "Balloon Dealer – Annesburg",
+        sprite    = -780469251,
+        coords    = vector3(2513.96, 996.16, 115.77),   -- Annesburg
+        spawn     = vector3(2499.64, 996.54, 117.56),
+        npcCoords = vector4(2513.96, 996.16, 115.77, 69.95),
     },
 }
