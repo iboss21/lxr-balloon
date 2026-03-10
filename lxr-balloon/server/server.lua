@@ -78,6 +78,46 @@ local function GetCharacterData(src)
     return Character
 end
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Job Validation Helper
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local function HasAllowedJob(src)
+    if not Config.AllowedJobs or #Config.AllowedJobs == 0 then return true end
+
+    for _, entry in ipairs(Config.AllowedJobs) do
+        if entry == "all" then return true end
+    end
+
+    -- Framework-aware job lookup
+    if Framework.Type == 'standalone' then return true end
+
+    local User = Framework.GetUser(src)
+    if not User then return true end
+
+    local playerJob = nil
+
+    if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
+        local PlayerData = User.PlayerData
+        if PlayerData and PlayerData.job then
+            playerJob = PlayerData.job.name
+        end
+    elseif Framework.Type == 'vorp' then
+        local UsedChar = User.getUsedCharacter
+        if UsedChar then playerJob = UsedChar.job end
+    elseif Framework.Type == 'redemrp' then
+        playerJob = User.getJob and User.getJob() or nil
+    end
+
+    if not playerJob then return true end
+
+    for _, entry in ipairs(Config.AllowedJobs) do
+        if entry == playerJob then return true end
+    end
+
+    return false
+end
+
 RegisterServerEvent('rs_balloon:checkOwned')
 AddEventHandler('rs_balloon:checkOwned', function()
     local src = source
@@ -103,6 +143,40 @@ AddEventHandler('rs_balloon:checkOwned', function()
     end)
 end)
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Dedicated Dealer – buy-only interaction (Config.DealerLocation)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+RegisterServerEvent('rs_balloon:checkOwnedDealer')
+AddEventHandler('rs_balloon:checkOwnedDealer', function()
+    local src = source
+    local Character = GetCharacterData(src)
+
+    if not Character then
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        return
+    end
+
+    if not HasAllowedJob(src) then
+        Framework.NotifyLeft(src, T.Tittle, T.JobRestricted or "You do not have permission to purchase a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
+        return
+    end
+
+    local u_identifier = Character.identifier
+    local u_charid = Character.charIdentifier
+
+    exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
+        ['@identifier'] = u_identifier,
+        ['@charid'] = u_charid
+    }, function(result)
+        if result and result[1] then
+            TriggerClientEvent('rs_balloon:openDealerMenu', src, true)
+        else
+            TriggerClientEvent('rs_balloon:openDealerMenu', src, false)
+        end
+    end)
+end)
+
 RegisterNetEvent('rs_balloon:RentBalloon')
 AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
     local src = source
@@ -110,6 +184,11 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
     
     if not Character or not Character.identifier then
         print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        return
+    end
+
+    if not HasAllowedJob(src) then
+        Framework.NotifyLeft(src, T.Tittle, T.JobRestricted or "You do not have permission to rent a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
@@ -257,6 +336,11 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
     
     if not Character then
         print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
+        return
+    end
+
+    if not HasAllowedJob(source) then
+        Framework.NotifyLeft(source, T.Tittle, T.JobRestricted or "You do not have permission to purchase a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
