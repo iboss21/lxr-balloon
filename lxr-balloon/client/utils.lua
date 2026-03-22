@@ -4,11 +4,14 @@ local T = Translation.Langs[Config.Lang]
 local showingPrompt = false
 
 Citizen.CreateThread(function()
+    -- Use configurable keybind with backward-compatible fallback
+    local rentKey = (Config.Keybinds and Config.Keybinds.rentBalloon) or Config.KeyToBuyBalloon
+
     while true do
         local playerCoords = GetEntityCoords(PlayerPedId())
         local nearLocation = false
 
-        for _, location in pairs(Config.BalloonLocations) do
+        for locIndex, location in pairs(Config.BalloonLocations) do
             local distance = Vdist(playerCoords, location.coords.x, location.coords.y, location.coords.z)
             if distance < 2.0 then
                 if not showingPrompt then
@@ -19,8 +22,8 @@ Citizen.CreateThread(function()
                     showingPrompt = true
                 end
 
-                if IsControlJustReleased(0, Config.KeyToBuyBalloon) then
-                    TriggerServerEvent('rs_balloon:RentBalloon', _)
+                if IsControlJustPressed(0, rentKey) then
+                    TriggerServerEvent('rs_balloon:RentBalloon', locIndex)
                 end
 
                 nearLocation = true

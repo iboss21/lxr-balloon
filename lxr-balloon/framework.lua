@@ -181,6 +181,34 @@ function Framework.NotifyLeft(source, title, message, dict, icon, duration, colo
     end
 end
 
+-- Send notification (Client-side) – works across all frameworks
+function Framework.ClientNotify(title, message, dict, icon, duration, color)
+    if Framework.Type == 'lxrcore' then
+        TriggerEvent('lxr-core:client:notify', {
+            title = title,
+            text = message,
+            type = color == 'COLOR_RED' and 'error' or 'success',
+            duration = duration or 4000
+        })
+    elseif Framework.Type == 'rsg-core' then
+        TriggerEvent('rsg-core:client:notify', {
+            title = title,
+            text = message,
+            type = color == 'COLOR_RED' and 'error' or 'success',
+            duration = duration or 4000
+        })
+    elseif Framework.Type == 'vorp' and Framework.Core and Framework.Core.NotifyLeft then
+        Framework.Core.NotifyLeft(title, message, dict or "menu_textures", icon or "cross", duration or 4000, color or "COLOR_WHITE")
+    elseif Framework.Type == 'redemrp' then
+        TriggerEvent('redem_roleplay:NotifyLeft', title, message, duration or 4000)
+    else
+        -- Standalone / fallback: print to chat
+        TriggerEvent('chat:addMessage', {
+            args = { title, message }
+        })
+    end
+end
+
 -- Get item count from player inventory (Server-side)
 function Framework.GetItemCount(source, itemName)
     local User = Framework.GetUser(source)

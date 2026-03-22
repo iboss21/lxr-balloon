@@ -8,6 +8,285 @@ local T = Translation.Langs[Config.Lang]
 local Core = nil
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- Database Abstraction Layer
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Supports oxmysql for persistent storage and falls back to in-memory tables.
+
+local DB = {}
+local useOxmysql = false
+
+-- In-memory storage for non-oxmysql mode
+local memBalloonBuy = {}      -- { { identifier=..., charid=..., name=... }, ... }
+local memBalloonRentals = {}  -- { { user_id=..., character_id=..., duration=... }, ... }
+
+local function initDatabase()
+    local mode = Config.DatabaseMode or 'auto'
+
+    if mode == 'oxmysql' then
+        useOxmysql = true
+    elseif mode == 'memory' then
+        useOxmysql = false
+    else -- auto
+        local ok, _ = pcall(function()
+            return exports.oxmysql
+        end)
+        if ok and GetResourceState('oxmysql') == 'started' then
+            useOxmysql = true
+        else
+            useOxmysql = false
+        end
+    end
+
+    if useOxmysql then
+        print('[lxr-balloon] Database: oxmysql (persistent)')
+    else
+        print('[lxr-balloon] Database: in-memory (non-persistent)')
+    end
+end
+
+-- Safe oxmysql execute wrapper
+function DB.execute(query, params, cb)
+    if useOxmysql then
+        exports.oxmysql:execute(query, params, cb or function() end)
+    else
+        -- In-memory fallback – handled per-call in the event handlers
+        if cb then cb({}) end
+    end
+end
+
+-- Lookup a balloon_buy row by identifier + charid
+function DB.findBalloonBuy(identifier, charid, cb)
+    if useOxmysql then
+        exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
+            ['@identifier'] = identifier,
+            ['@charid'] = tostring(charid)
+        }, cb)
+    else
+        local result = {}
+        for _, row in ipairs(memBalloonBuy) do
+            if row.identifier == identifier and tostring(row.charid) == tostring(charid) then
+                result[#result + 1] = row
+                break
+            end
+        end
+        cb(result)
+    end
+end
+
+-- Insert a balloon_buy row
+function DB.insertBalloonBuy(identifier, charid, name, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("INSERT INTO balloon_buy (`identifier`, `charid`, `name`) VALUES (?, ?, ?)", {
+            tostring(identifier),
+            tostring(charid),
+            name
+        }, cb or function() end)
+    else
+        memBalloonBuy[#memBalloonBuy + 1] = { identifier = identifier, charid = tostring(charid), name = name }
+        if cb then cb({}) end
+    end
+end
+
+-- Delete a balloon_buy row
+function DB.deleteBalloonBuy(identifier, charid, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("DELETE FROM balloon_buy WHERE identifier = @identifier AND charid = @charid", {
+            ['@identifier'] = identifier,
+            ['@charid'] = tostring(charid)
+        }, cb or function() end)
+    else
+        for i = #memBalloonBuy, 1, -1 do
+            local row = memBalloonBuy[i]
+            if row.identifier == identifier and tostring(row.charid) == tostring(charid) then
+                table.remove(memBalloonBuy, i)
+                break
+            end
+        end
+        if cb then cb({}) end
+    end
+end
+
+-- Transfer balloon_buy ownership
+function DB.transferBalloonBuy(oldId, oldCharid, newId, newCharid, cb)
+    if useOxmysql then
+        exports.oxmysql:execute('UPDATE balloon_buy SET identifier = @newIdentifier, charid = @newCharId WHERE identifier = @oldIdentifier AND charid = @oldCharId LIMIT 1', {
+            ['@newIdentifier'] = newId,
+            ['@newCharId'] = tostring(newCharid),
+            ['@oldIdentifier'] = oldId,
+            ['@oldCharId'] = tostring(oldCharid)
+        }, cb or function() end)
+    else
+        for _, row in ipairs(memBalloonBuy) do
+            if row.identifier == oldId and tostring(row.charid) == tostring(oldCharid) then
+                row.identifier = newId
+                row.charid = tostring(newCharid)
+                break
+            end
+        end
+        if cb then cb({}) end
+    end
+end
+
+-- Get all balloon_buy rows for an owner
+function DB.getBalloonsByOwner(identifier, charid, cb)
+    if useOxmysql then
+        exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid', {
+            ['@identifier'] = identifier,
+            ['@charid'] = tostring(charid)
+        }, cb)
+    else
+        local result = {}
+        for _, row in ipairs(memBalloonBuy) do
+            if row.identifier == identifier and tostring(row.charid) == tostring(charid) then
+                result[#result + 1] = row
+            end
+        end
+        cb(result)
+    end
+end
+
+-- Find rental by user_id + character_id
+function DB.findRental(user_id, character_id, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("SELECT * FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
+            user_id,
+            tostring(character_id)
+        }, cb)
+    else
+        local result = {}
+        for _, row in ipairs(memBalloonRentals) do
+            if row.user_id == user_id and tostring(row.character_id) == tostring(character_id) then
+                result[#result + 1] = row
+            end
+        end
+        cb(result)
+    end
+end
+
+-- Insert rental and return an id
+function DB.insertRental(user_id, character_id, duration, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("INSERT INTO balloon_rentals (user_id, character_id, duration) VALUES (?, ?, ?)", {
+            user_id,
+            tostring(character_id),
+            duration
+        }, function()
+            exports.oxmysql:execute("SELECT LAST_INSERT_ID() AS id", {}, function(idResult)
+                local id = (idResult and idResult[1] and idResult[1].id) or math.random(100000, 999999)
+                cb(id)
+            end)
+        end)
+    else
+        local id = #memBalloonRentals + 1
+        memBalloonRentals[#memBalloonRentals + 1] = {
+            id = id,
+            user_id = user_id,
+            character_id = tostring(character_id),
+            duration = duration
+        }
+        cb(id)
+    end
+end
+
+-- Update rental duration
+function DB.updateRentalDuration(user_id, character_id, decrementSeconds)
+    if useOxmysql then
+        exports.oxmysql:execute("UPDATE balloon_rentals SET duration = duration - ? WHERE user_id = ? AND character_id = ?", {
+            decrementSeconds,
+            user_id,
+            tostring(character_id)
+        })
+    else
+        for _, row in ipairs(memBalloonRentals) do
+            if row.user_id == user_id and tostring(row.character_id) == tostring(character_id) then
+                row.duration = row.duration - decrementSeconds
+                break
+            end
+        end
+    end
+end
+
+-- Get rental remaining duration
+function DB.getRentalDuration(user_id, character_id, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("SELECT duration FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
+            user_id,
+            tostring(character_id)
+        }, cb)
+    else
+        local result = {}
+        for _, row in ipairs(memBalloonRentals) do
+            if row.user_id == user_id and tostring(row.character_id) == tostring(character_id) then
+                result[#result + 1] = { duration = row.duration }
+            end
+        end
+        cb(result)
+    end
+end
+
+-- Delete rental
+function DB.deleteRental(user_id, character_id, cb)
+    if useOxmysql then
+        exports.oxmysql:execute("DELETE FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
+            user_id,
+            tostring(character_id)
+        }, cb or function() end)
+    else
+        for i = #memBalloonRentals, 1, -1 do
+            local row = memBalloonRentals[i]
+            if row.user_id == user_id and tostring(row.character_id) == tostring(character_id) then
+                table.remove(memBalloonRentals, i)
+            end
+        end
+        if cb then cb({}) end
+    end
+end
+
+-- Delete all rentals (used on resource start)
+function DB.deleteAllRentals(cb)
+    if useOxmysql then
+        exports.oxmysql:execute("DELETE FROM balloon_rentals", {}, cb or function() end)
+    else
+        memBalloonRentals = {}
+        if cb then cb({}) end
+    end
+end
+
+-- Insert/update damage record
+function DB.upsertDamage(ownerId, ownerCharid, balloonNetId, hitCount)
+    if useOxmysql then
+        exports.oxmysql:execute('INSERT INTO balloon_damage (balloon_owner_id, balloon_owner_charid, balloon_net_id, hit_count, is_damaged, damage_time) VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE hit_count = ?, is_damaged = ?, damage_time = NOW()', {
+            ownerId,
+            tostring(ownerCharid),
+            balloonNetId,
+            hitCount,
+            1,
+            hitCount,
+            1
+        })
+    end
+    -- In-memory mode: damage tracking is handled in balloonDamage table (already in-memory)
+end
+
+-- Delete damage by net id
+function DB.deleteDamage(balloonNetId, cb)
+    if useOxmysql then
+        exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_net_id = ?', { balloonNetId }, cb or function() end)
+    else
+        if cb then cb({}) end
+    end
+end
+
+-- Delete all damage (used on resource start)
+function DB.deleteAllDamage(cb)
+    if useOxmysql then
+        exports.oxmysql:execute("DELETE FROM balloon_damage", {}, cb or function() end)
+    else
+        if cb then cb({}) end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- In-Memory Storage for Performance
 -- ═══════════════════════════════════════════════════════════════════════════════
 local balloonOwners = {}      -- [balloonNetId] = { owner = src, identifier = id, charid = charid }
@@ -18,6 +297,7 @@ local pendingInvites = {}     -- [targetSrc] = { balloonNetId = id, inviterSrc =
 -- Initialize framework on server start
 Citizen.CreateThread(function()
     Core = Framework.InitServer()
+    initDatabase()
 end)
 
 -- Helper function to get character data with multi-framework support
@@ -125,16 +405,14 @@ AddEventHandler('rs_balloon:checkOwned', function()
     
     if not Character then
         print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        Framework.NotifyLeft(src, T.Tittle, T.Error or "Error loading character data", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
     local u_identifier = Character.identifier
     local u_charid = Character.charIdentifier
 
-    exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
-        ['@identifier'] = u_identifier,
-        ['@charid'] = u_charid
-    }, function(result)
+    DB.findBalloonBuy(u_identifier, u_charid, function(result)
         if result and result[1] then
             TriggerClientEvent('rs_balloon:openMenu', src, true)
         else
@@ -165,10 +443,7 @@ AddEventHandler('rs_balloon:checkOwnedDealer', function()
     local u_identifier = Character.identifier
     local u_charid = Character.charIdentifier
 
-    exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
-        ['@identifier'] = u_identifier,
-        ['@charid'] = u_charid
-    }, function(result)
+    DB.findBalloonBuy(u_identifier, u_charid, function(result)
         if result and result[1] then
             TriggerClientEvent('rs_balloon:openDealerMenu', src, true)
         else
@@ -197,6 +472,11 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
     local duration = Config.BallonUseTime * 60
     local requiredFuel = 0
 
+    -- Check if rental fee is enabled
+    if not Config.EnableTax then
+        cost = 0
+    end
+
     -- Check for fuel requirement if enabled
     if Config.FuelRequirement.enabled then
         local fuelCount = Framework.GetItemCount(src, Config.FuelRequirement.itemName)
@@ -212,22 +492,21 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
         end
     end
 
-    if money < cost then
+    if cost > 0 and money < cost then
         Framework.NotifyLeft(src, T.Tittle, T.NeedMoney .. "  " .. cost .. "$ " .. T.ToRentBalloon,  "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
-    exports.oxmysql:execute("SELECT * FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
-        Character.identifier,
-        Character.charIdentifier
-    }, function(result)
-        if result[1] then
+    DB.findRental(Character.identifier, Character.charIdentifier, function(result)
+        if result and result[1] then
             Framework.NotifyLeft(src, T.Tittle, T.AlreadyHasBalloon, "menu_textures", "cross", 4000, "COLOR_RED")
             return
         end
 
         -- Remove currency first to ensure player can afford rental
-        Character.removeCurrency(0, cost)
+        if cost > 0 then
+            Character.removeCurrency(0, cost)
+        end
         
         -- Remove fuel after successful payment (using the previously calculated amount)
         if Config.FuelRequirement.enabled and requiredFuel > 0 then
@@ -236,18 +515,9 @@ AddEventHandler('rs_balloon:RentBalloon', function(locationIndex)
         
         Framework.NotifyLeft(src, T.Tittle, T.BalloonRented .. " " .. Config.BallonUseTime .. " " .. T.Minutes, "generic_textures", "tick", 4000, "COLOR_GREEN")
 
-        exports.oxmysql:execute("INSERT INTO balloon_rentals (user_id, character_id, duration) VALUES (?, ?, ?)", {
-            Character.identifier,
-            Character.charIdentifier,
-            duration
-        }, function()
-            exports.oxmysql:execute("SELECT LAST_INSERT_ID() AS id", {}, function(idResult)
-                if idResult and idResult[1] and idResult[1].id then
-                    local balloonId = idResult[1].id
-                    TriggerClientEvent("rs_balloon:spawnBalloon1", src, balloonId, locationIndex)
-                    startBalloonCountdown(Character.identifier, Character.charIdentifier, src, balloonId)
-                end
-            end)
+        DB.insertRental(Character.identifier, Character.charIdentifier, duration, function(balloonId)
+            TriggerClientEvent("rs_balloon:spawnBalloon1", src, balloonId, locationIndex)
+            startBalloonCountdown(Character.identifier, Character.charIdentifier, src, balloonId)
         end)
     end)
 end)
@@ -264,40 +534,30 @@ function startBalloonCountdown(user_id, character_id, src, balloonId)
         while not shouldStop do
             Citizen.Wait(interval_ms)
 
-            exports.oxmysql:execute("UPDATE balloon_rentals SET duration = duration - ? WHERE user_id = ? AND character_id = ?", {
-                interval,
-                user_id,
-                character_id
-            })
+            DB.updateRentalDuration(user_id, character_id, interval)
 
-            exports.oxmysql:execute("SELECT duration FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
-                user_id,
-                character_id
-            }, function(result)
-                if result[1] then
+            DB.getRentalDuration(user_id, character_id, function(result)
+                if result and result[1] then
                     local remaining = tonumber(result[1].duration)
 
-                    if remaining == 90 and not warned_90 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
+                    if remaining and remaining <= 90 and remaining > 60 and not warned_90 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, 90)
                         warned_90 = true
                     end
 
-                    if remaining == 60 and not warned_60 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
+                    if remaining and remaining <= 60 and remaining > 30 and not warned_60 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, 60)
                         warned_60 = true
                     end
 
-                    if remaining == 30 and not warned_30 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
+                    if remaining and remaining <= 30 and remaining > 0 and not warned_30 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, 30)
                         warned_30 = true
                     end
 
-                    if remaining <= 0 then
+                    if remaining and remaining <= 0 then
                         TriggerClientEvent("rs_balloon:balloonWarning", src, 0)
-                        exports.oxmysql:execute("DELETE FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
-                            user_id,
-                            character_id
-                        })
+                        DB.deleteRental(user_id, character_id)
                         TriggerClientEvent("rs_balloon:deleteTemporaryBalloon", src, balloonId)
                         shouldStop = true
                     end
@@ -318,10 +578,7 @@ AddEventHandler("rs_balloon:removeBalloonFromSQL", function(balloonNetId)
         return
     end
 
-    exports.oxmysql:execute("DELETE FROM balloon_rentals WHERE user_id = ? AND character_id = ?", {
-        Character.identifier,
-        Character.charIdentifier
-    })
+    DB.deleteRental(Character.identifier, Character.charIdentifier)
     
     if balloonNetId then
         cleanupBalloonData(balloonNetId)
@@ -336,11 +593,27 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
     
     if not Character then
         print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
+        Framework.NotifyLeft(source, T.Tittle, T.Error or "Error loading character data", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
     if not HasAllowedJob(source) then
         Framework.NotifyLeft(source, T.Tittle, T.JobRestricted or "You do not have permission to purchase a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
+        return
+    end
+
+    -- Validate price against config to prevent client-side manipulation
+    local validPrice = false
+    for _, globo in pairs(Config.Globo) do
+        if globo.Param.Name == _name and globo.Param.Price == _price then
+            validPrice = true
+            break
+        end
+    end
+
+    if not validPrice then
+        print('[lxr-balloon] WARNING: Invalid price/name from player ' .. source .. ' - Name: ' .. tostring(_name) .. ' Price: ' .. tostring(_price))
+        Framework.NotifyLeft(source, T.Tittle, T.Error or "Invalid balloon selection", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -355,13 +628,7 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
 
     Character.removeCurrency(0, _price)
 
-    local Parameters = {
-        ['identifier'] = u_identifier,
-        ['charid'] = u_charid,
-        ['name'] = _name
-    }
-
-    exports.oxmysql:execute("INSERT INTO balloon_buy (`identifier`, `charid`, `name`) VALUES (@identifier, @charid, @name)", Parameters)
+    DB.insertBalloonBuy(u_identifier, u_charid, _name)
     Framework.NotifyLeft(source, T.Tittle, T.Noti1, "generic_textures", "tick", 4000, "COLOR_GREEN")
 end)
 
@@ -378,13 +645,8 @@ AddEventHandler('rs_balloon:loadownedBallons', function()
     local u_identifier = Character.identifier
     local u_charid = Character.charIdentifier
 
-    local Parameters = {
-        ['@identifier'] = u_identifier,
-        ['@charid'] = u_charid
-    }
-
-    exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid', Parameters, function(HasBalloons)
-        if HasBalloons[1] then
+    DB.getBalloonsByOwner(u_identifier, u_charid, function(HasBalloons)
+        if HasBalloons and HasBalloons[1] then
             TriggerClientEvent("rs_balloon:loadBallonMenu", _source, HasBalloons)
         end
     end)
@@ -406,21 +668,13 @@ AddEventHandler('rs_balloon:transferBalloon', function(targetId)
     local target_identifier = targetCharacter.identifier
     local target_charid = targetCharacter.charIdentifier
 
-    -- Verificar si el receptor ya tiene un globo
-    exports.oxmysql:execute('SELECT * FROM balloon_buy WHERE identifier = @identifier AND charid = @charid LIMIT 1', {
-        ['@identifier'] = target_identifier,
-        ['@charid'] = target_charid
-    }, function(existing)
+    -- Check if the target already has a balloon
+    DB.findBalloonBuy(target_identifier, target_charid, function(existing)
         if existing and existing[1] then
             Framework.NotifyLeft(src, T.Tittle, T.has, "menu_textures", "cross", 4000, "COLOR_RED")
         else
-            -- Transferir el globo al nuevo jugador
-            exports.oxmysql:execute('UPDATE balloon_buy SET identifier = @newIdentifier, charid = @newCharId WHERE identifier = @oldIdentifier AND charid = @oldCharId LIMIT 1', {
-                ['@newIdentifier'] = target_identifier,
-                ['@newCharId'] = target_charid,
-                ['@oldIdentifier'] = sender_identifier,
-                ['@oldCharId'] = sender_charid
-            }, function()
+            -- Transfer the balloon to the new player
+            DB.transferBalloonBuy(sender_identifier, sender_charid, target_identifier, target_charid, function()
                 Framework.NotifyLeft(src, T.Tittle, T.Tranfer, "generic_textures", "tick", 4000, "COLOR_GREEN")
                 Framework.NotifyLeft(tonumber(targetId), T.Tittle, T.Received, "generic_textures", "tick", 4000, "COLOR_GREEN")
             end)
@@ -444,26 +698,43 @@ AddEventHandler('rs_balloon:sellballoon', function(args)
 
     local u_identifier = Character.identifier
     local u_charid = Character.charIdentifier
-    local original_price = nil
 
-    for _, globo in pairs(Config.Globo) do
-        original_price = globo.Param.Price
-        break
-    end
+    -- Find the matching balloon name in owned balloons, then find its config price
+    DB.getBalloonsByOwner(u_identifier, u_charid, function(ownedBalloons)
+        if not ownedBalloons or not ownedBalloons[1] then
+            Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
+            return
+        end
 
-    if original_price then
-        local sell_price = original_price * Config.Sellprice
+        local ownedName = ownedBalloons[1].name
+        local original_price = nil
 
-        Character.addCurrency(0, sell_price)
+        for _, globo in pairs(Config.Globo) do
+            if globo.Param.Name == ownedName then
+                original_price = globo.Param.Price
+                break
+            end
+        end
 
-        exports.oxmysql:execute("DELETE FROM balloon_buy WHERE identifier = @identifier AND charid = @charid", {
-            ['@identifier'] = u_identifier,
-            ['@charid'] = u_charid,
-        })
-        Framework.NotifyLeft(source, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
-    else
-        Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
-    end
+        -- Fallback: use the first Config.Globo price if no name match
+        if not original_price then
+            for _, globo in pairs(Config.Globo) do
+                original_price = globo.Param.Price
+                break
+            end
+        end
+
+        if original_price then
+            local sell_price = original_price * Config.Sellprice
+
+            Character.addCurrency(0, sell_price)
+
+            DB.deleteBalloonBuy(u_identifier, u_charid)
+            Framework.NotifyLeft(source, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
+        else
+            Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
+        end
+    end)
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -640,15 +911,12 @@ AddEventHandler('rs_balloon:balloonDamaged', function(balloonNetId, damageAmount
         balloonDamage[balloonNetId].isDamaged = true
         
         if balloonOwners[balloonNetId] then
-            exports.oxmysql:execute('INSERT INTO balloon_damage (balloon_owner_id, balloon_owner_charid, balloon_net_id, hit_count, is_damaged, damage_time) VALUES (?, ?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE hit_count = ?, is_damaged = ?, damage_time = NOW()', {
+            DB.upsertDamage(
                 balloonOwners[balloonNetId].identifier,
                 balloonOwners[balloonNetId].charid,
                 balloonNetId,
-                balloonDamage[balloonNetId].hits,
-                1,
-                balloonDamage[balloonNetId].hits,
-                1
-            })
+                balloonDamage[balloonNetId].hits
+            )
         end
         
         if balloonOwners[balloonNetId] then
@@ -770,7 +1038,7 @@ AddEventHandler('rs_balloon:repairBalloon', function(balloonNetId)
         isDamaged = false
     }
     
-    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_net_id = ?', { balloonNetId })
+    DB.deleteDamage(balloonNetId)
     
     TriggerClientEvent('rs_balloon:balloonRepaired', src, balloonNetId)
     Framework.NotifyLeft(src, T.Tittle, "Balloon repaired successfully!", "generic_textures", "tick", 4000, "COLOR_GREEN")
@@ -785,7 +1053,7 @@ function cleanupBalloonData(balloonNetId)
     balloonPassengers[balloonNetId] = nil
     balloonDamage[balloonNetId] = nil
     
-    exports.oxmysql:execute('DELETE FROM balloon_damage WHERE balloon_net_id = ?', { balloonNetId })
+    DB.deleteDamage(balloonNetId)
 end
 
 RegisterNetEvent('rs_balloon:cleanupBalloon')
@@ -801,8 +1069,6 @@ AddEventHandler("onResourceStart", function(resourceName)
     balloonDamage = {}
     pendingInvites = {}
     
-    exports.oxmysql:execute("DELETE FROM balloon_rentals", {}, function()
-    end)
-    exports.oxmysql:execute("DELETE FROM balloon_damage", {}, function()
-    end)
+    DB.deleteAllRentals()
+    DB.deleteAllDamage()
 end)
