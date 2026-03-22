@@ -302,20 +302,21 @@ end)
 
 -- Helper function to get character data with multi-framework support
 local function GetCharacterData(src)
-    if not Core then return nil end
+    -- For standalone mode, Core is nil by design - still return character data
+    if not Core and Framework.Type ~= 'standalone' then return nil end
     
     local User = Framework.GetUser(src)
-    if not User then return nil end
     
     local Character = {}
     
     if Framework.Type == 'lxrcore' or Framework.Type == 'rsg-core' then
+        if not User then return nil end
         local PlayerData = User.PlayerData
         if not PlayerData then return nil end
         
         Character.identifier = PlayerData.citizenid or PlayerData.cid
         Character.charIdentifier = PlayerData.citizenid or PlayerData.cid
-        Character.money = PlayerData.money.cash or 0
+        Character.money = PlayerData.money and PlayerData.money.cash or 0
         
         -- Add currency management functions
         Character.removeCurrency = function(currencyType, amount)
@@ -326,6 +327,7 @@ local function GetCharacterData(src)
             User.Functions.AddMoney('cash', amount)
         end
     elseif Framework.Type == 'vorp' then
+        if not User then return nil end
         local UsedCharacter = User.getUsedCharacter
         if not UsedCharacter then return nil end
         
@@ -335,6 +337,7 @@ local function GetCharacterData(src)
         Character.removeCurrency = UsedCharacter.removeCurrency
         Character.addCurrency = UsedCharacter.addCurrency
     elseif Framework.Type == 'redemrp' then
+        if not User then return nil end
         Character.identifier = User.getIdentifier()
         Character.charIdentifier = User.getIdentifier()
         Character.money = User.getMoney() or 0
@@ -540,18 +543,18 @@ function startBalloonCountdown(user_id, character_id, src, balloonId)
                 if result and result[1] then
                     local remaining = tonumber(result[1].duration)
 
-                    if remaining and remaining <= 90 and remaining > 60 and not warned_90 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, 90)
+                    if remaining and remaining <= 90 and not warned_90 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
                         warned_90 = true
                     end
 
-                    if remaining and remaining <= 60 and remaining > 30 and not warned_60 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, 60)
+                    if remaining and remaining <= 60 and not warned_60 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
                         warned_60 = true
                     end
 
-                    if remaining and remaining <= 30 and remaining > 0 and not warned_30 then
-                        TriggerClientEvent("rs_balloon:balloonWarning", src, 30)
+                    if remaining and remaining <= 30 and not warned_30 then
+                        TriggerClientEvent("rs_balloon:balloonWarning", src, remaining)
                         warned_30 = true
                     end
 

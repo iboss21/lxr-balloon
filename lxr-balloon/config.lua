@@ -430,11 +430,11 @@ Config.DealerLocation = {
 ]]
 
 Config.Keybinds = {
-    -- Rental interaction key (default: SPACE)
-    rentBalloon       = 0xD9D0E1C0,
-    -- Shop / Dealer interaction key (default: E)
-    shopInteract      = 0x760A9C6F,
-    -- Flight controls (use native input names)
+    -- Rental interaction key (hex hash – no named INPUT constant available)
+    rentBalloon       = 0xD9D0E1C0, -- SPACE
+    -- Shop / Dealer interaction key (hex hash – no named INPUT constant available)
+    shopInteract      = 0x760A9C6F, -- E
+    -- Flight controls (backtick syntax resolves named INPUT constants at load time)
     moveForward       = `INPUT_VEH_MOVE_UP_ONLY`,
     moveBackward      = `INPUT_VEH_MOVE_DOWN_ONLY`,
     moveLeft          = `INPUT_VEH_MOVE_LEFT_ONLY`,
