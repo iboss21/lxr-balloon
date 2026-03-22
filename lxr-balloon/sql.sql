@@ -50,3 +50,26 @@ CREATE TABLE IF NOT EXISTS `balloon_damage` (
   KEY `idx_balloon_net_id` (`balloon_net_id`),
   KEY `idx_owner` (`balloon_owner_id`, `balloon_owner_charid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Migration: Convert INT columns to VARCHAR(50) for existing databases
+-- Safe to run multiple times – only changes columns that are still INT.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE `balloon_buy`
+  MODIFY COLUMN `identifier` varchar(50) NOT NULL,
+  MODIFY COLUMN `charid` varchar(50) NOT NULL;
+
+ALTER TABLE `balloon_rentals`
+  MODIFY COLUMN `user_id` varchar(50) NOT NULL,
+  MODIFY COLUMN `character_id` varchar(50) NOT NULL;
+
+ALTER TABLE `balloon_passengers`
+  MODIFY COLUMN `balloon_owner_id` varchar(50) NOT NULL,
+  MODIFY COLUMN `balloon_owner_charid` varchar(50) NOT NULL,
+  MODIFY COLUMN `passenger_id` varchar(50) NOT NULL,
+  MODIFY COLUMN `passenger_charid` varchar(50) NOT NULL;
+
+ALTER TABLE `balloon_damage`
+  MODIFY COLUMN `balloon_owner_id` varchar(50) NOT NULL,
+  MODIFY COLUMN `balloon_owner_charid` varchar(50) NOT NULL;

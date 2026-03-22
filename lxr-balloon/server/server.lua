@@ -590,18 +590,19 @@ end)
 
 RegisterServerEvent('rs_balloon:buyballoon')
 AddEventHandler('rs_balloon:buyballoon', function(args)
+    local src = source
     local _price = args['Price']
     local _name = args['Name']
-    local Character = GetCharacterData(source)
+    local Character = GetCharacterData(src)
     
     if not Character then
-        print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
-        Framework.NotifyLeft(source, T.Tittle, T.Error or "Error loading character data", "menu_textures", "cross", 4000, "COLOR_RED")
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
+        Framework.NotifyLeft(src, T.Tittle, T.Error or "Error loading character data", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
-    if not HasAllowedJob(source) then
-        Framework.NotifyLeft(source, T.Tittle, T.JobRestricted or "You do not have permission to purchase a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
+    if not HasAllowedJob(src) then
+        Framework.NotifyLeft(src, T.Tittle, T.JobRestricted or "You do not have permission to purchase a balloon", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -615,8 +616,8 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
     end
 
     if not validPrice then
-        print('[lxr-balloon] WARNING: Invalid price/name from player ' .. source .. ' - Name: ' .. tostring(_name) .. ' Price: ' .. tostring(_price))
-        Framework.NotifyLeft(source, T.Tittle, T.Error or "Invalid balloon selection", "menu_textures", "cross", 4000, "COLOR_RED")
+        print('[lxr-balloon] WARNING: Invalid price/name from player ' .. src .. ' - Name: ' .. tostring(_name) .. ' Price: ' .. tostring(_price))
+        Framework.NotifyLeft(src, T.Tittle, T.Error or "Invalid balloon selection", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -625,14 +626,14 @@ AddEventHandler('rs_balloon:buyballoon', function(args)
     local u_money = Character.money
 
     if u_money < _price then
-        Framework.NotifyLeft(source, T.Tittle, T.Noti,  "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.NotifyLeft(src, T.Tittle, T.Noti,  "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
     Character.removeCurrency(0, _price)
 
     DB.insertBalloonBuy(u_identifier, u_charid, _name)
-    Framework.NotifyLeft(source, T.Tittle, T.Noti1, "generic_textures", "tick", 4000, "COLOR_GREEN")
+    Framework.NotifyLeft(src, T.Tittle, T.Noti1, "generic_textures", "tick", 4000, "COLOR_GREEN")
 end)
 
 RegisterServerEvent('rs_balloon:loadownedBallons')
@@ -687,15 +688,16 @@ end)
 
 RegisterServerEvent('rs_balloon:sellballoon')
 AddEventHandler('rs_balloon:sellballoon', function(args)
+    local src = source
     if not args then
-        Framework.NotifyLeft(source, T.Tittle, T.Error, "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.NotifyLeft(src, T.Tittle, T.Error, "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
-    local Character = GetCharacterData(source)
+    local Character = GetCharacterData(src)
     
     if not Character then
-        print('[lxr-balloon] ERROR: Could not get character data for player ' .. source)
+        print('[lxr-balloon] ERROR: Could not get character data for player ' .. src)
         return
     end
 
@@ -705,7 +707,7 @@ AddEventHandler('rs_balloon:sellballoon', function(args)
     -- Find the matching balloon name in owned balloons, then find its config price
     DB.getBalloonsByOwner(u_identifier, u_charid, function(ownedBalloons)
         if not ownedBalloons or not ownedBalloons[1] then
-            Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
+            Framework.NotifyLeft(src, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
             return
         end
 
@@ -733,9 +735,9 @@ AddEventHandler('rs_balloon:sellballoon', function(args)
             Character.addCurrency(0, sell_price)
 
             DB.deleteBalloonBuy(u_identifier, u_charid)
-            Framework.NotifyLeft(source, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
+            Framework.NotifyLeft(src, T.Tittle, T.Buy .. " " .. sell_price .. "$",  "generic_textures", "tick", 4000, "COLOR_GREEN")
         else
-            Framework.NotifyLeft(source, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
+            Framework.NotifyLeft(src, T.Tittle, T.Dont, "menu_textures", "cross", 4000, "COLOR_RED")
         end
     end)
 end)
