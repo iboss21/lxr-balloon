@@ -39,6 +39,23 @@ local function initDatabase()
 
     if useOxmysql then
         print('[lxr-balloon] Database: oxmysql (persistent)')
+        -- Auto-migrate INT columns to VARCHAR(50) for existing databases.
+        -- This fixes "Incorrect integer value" errors for string-based character IDs.
+        -- Safe to run on every startup: MODIFY COLUMN is idempotent and these tables are small.
+        -- Errors are expected on first install before tables are created via sql.sql.
+        local migrations = {
+            {"ALTER TABLE `balloon_buy` MODIFY COLUMN `identifier` VARCHAR(50) NOT NULL, MODIFY COLUMN `charid` VARCHAR(50) NOT NULL", "balloon_buy"},
+            {"ALTER TABLE `balloon_rentals` MODIFY COLUMN `user_id` VARCHAR(50) NOT NULL, MODIFY COLUMN `character_id` VARCHAR(50) NOT NULL", "balloon_rentals"},
+            {"ALTER TABLE `balloon_passengers` MODIFY COLUMN `balloon_owner_id` VARCHAR(50) NOT NULL, MODIFY COLUMN `balloon_owner_charid` VARCHAR(50) NOT NULL, MODIFY COLUMN `passenger_id` VARCHAR(50) NOT NULL, MODIFY COLUMN `passenger_charid` VARCHAR(50) NOT NULL", "balloon_passengers"},
+            {"ALTER TABLE `balloon_damage` MODIFY COLUMN `balloon_owner_id` VARCHAR(50) NOT NULL, MODIFY COLUMN `balloon_owner_charid` VARCHAR(50) NOT NULL", "balloon_damage"},
+        }
+        for _, m in ipairs(migrations) do
+            exports.oxmysql:execute(m[1], {}, function(success)
+                if success ~= nil then
+                    print(('[lxr-balloon] Migration: %s columns ensured VARCHAR(50)'):format(m[2]))
+                end
+            end)
+        end
     else
         print('[lxr-balloon] Database: in-memory (non-persistent)')
     end
