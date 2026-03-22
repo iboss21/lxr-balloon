@@ -188,11 +188,13 @@ Config.Lang = 'English' -- 'English' -- 'French' -- 'Portuguese_BR' -- 'Portugue
 -- ████████████████████████████████████████████████████████████████████████████████
 
 ------------------------------- Hot Air Balloon Rental ------------------------------
+-- NOTE: Config.KeyToBuyBalloon is kept for backward compatibility.
+-- Prefer using Config.Keybinds.rentBalloon for new configurations.
 Config.KeyToBuyBalloon = 0xD9D0E1C0 -- [ SPACE ] Key to rent the balloon
 
 -- Rental price settings
 Config.EnableTax = true   -- If true, the balloon rental fee will be charged, if false, it will be free.
-Config.BallonPrice = 5.00 -- Rental price
+Config.BallonPrice = 500.00 -- Rental price
 Config.BallonUseTime = 30 -- Rental duration time in minutes
 Config.BalloonModel = "hotairballoon01x"
 
@@ -319,21 +321,21 @@ Config.Globo = {
         ['Text'] = "Hot Air Balloon",   -- Change it to your language
         ['Param'] = {
            ['Name'] = "Hot Air Balloon", -- Change it to your language
-           ['Price'] = 1250,               -- Sale price
+           ['Price'] = 25000,               -- Sale price
         }
     },
     [2] = {
         ['Text'] = "Deluxe Hot Air Balloon",
         ['Param'] = {
             ['Name'] = "Deluxe Hot Air Balloon",
-            ['Price'] = 2500,
+            ['Price'] = 55000,
         }
     },
     [3] = {
         ['Text'] = "Luxury Hot Air Balloon",
         ['Param'] = {
             ['Name'] = "Luxury Hot Air Balloon",
-            ['Price'] = 5000,
+            ['Price'] = 99990,
         }
     },
 }
@@ -402,3 +404,58 @@ Config.DealerLocation = {
         npcCoords = vector4(2513.96, 996.16, 115.77, 69.95),
     },
 }
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ██████████████████████ KEYBIND CONFIGURATION SETTINGS ██████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+--[[
+    All keybinds used by the balloon system are configurable here.
+    Values are RedM control hashes. See:
+    https://github.com/femga/rdr3_discoveries/blob/master/Controls/Controls.lua
+
+    Common hashes:
+        0xD9D0E1C0 = INPUT_JUMP (SPACE)
+        0x760A9C6F = INPUT_PICKUP (E)
+        INPUT_VEH_MOVE_UP_ONLY   = W
+        INPUT_VEH_MOVE_DOWN_ONLY = S
+        INPUT_VEH_MOVE_LEFT_ONLY = A
+        INPUT_VEH_MOVE_RIGHT_ONLY = D
+        INPUT_VEH_FLY_THROTTLE_UP = Left Shift
+        INPUT_CONTEXT_X           = X
+        INPUT_CONTEXT_A           = A (context)
+        INPUT_VEH_HORN            = H
+        INPUT_FRONTEND_ACCEPT     = Enter
+        INPUT_FRONTEND_CANCEL     = Backspace
+]]
+
+Config.Keybinds = {
+    -- Rental interaction key (hex hash – no named INPUT constant available)
+    rentBalloon       = 0xD9D0E1C0, -- SPACE
+    -- Shop / Dealer interaction key (hex hash – no named INPUT constant available)
+    shopInteract      = 0x760A9C6F, -- E
+    -- Flight controls (backtick syntax resolves named INPUT constants at load time)
+    moveForward       = `INPUT_VEH_MOVE_UP_ONLY`,
+    moveBackward      = `INPUT_VEH_MOVE_DOWN_ONLY`,
+    moveLeft          = `INPUT_VEH_MOVE_LEFT_ONLY`,
+    moveRight         = `INPUT_VEH_MOVE_RIGHT_ONLY`,
+    ascend            = `INPUT_VEH_FLY_THROTTLE_UP`,
+    brake             = `INPUT_CONTEXT_X`,
+    lockAltitude      = `INPUT_CONTEXT_A`,
+    storeBalloon      = `INPUT_VEH_HORN`,
+    -- Passenger invite accept/decline
+    acceptInvite      = `INPUT_FRONTEND_ACCEPT`,
+    declineInvite     = `INPUT_FRONTEND_CANCEL`,
+}
+
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ██████████████████████ DATABASE CONFIGURATION ██████████████████████████████████
+-- ████████████████████████████████████████████████████████████████████████████████
+
+--[[
+    Database mode: 'oxmysql' or 'memory'
+    - 'oxmysql': Uses oxmysql for persistent MySQL/MariaDB storage (recommended)
+    - 'memory':  In-memory storage only; data is lost on resource/server restart
+    If set to 'auto', the script will use oxmysql if available, otherwise fall back to memory.
+]]
+Config.DatabaseMode = 'auto'

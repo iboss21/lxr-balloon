@@ -36,19 +36,32 @@ local isBalloonCrashing = false
 local balloonDamaged = false
 local lastPlayerHealth = nil
 
+-- Resolve keybinds with backward-compatible fallback
+local Keys = Config.Keybinds or {}
+local KEY_FORWARD      = Keys.moveForward   or `INPUT_VEH_MOVE_UP_ONLY`
+local KEY_BACKWARD     = Keys.moveBackward  or `INPUT_VEH_MOVE_DOWN_ONLY`
+local KEY_LEFT         = Keys.moveLeft      or `INPUT_VEH_MOVE_LEFT_ONLY`
+local KEY_RIGHT        = Keys.moveRight     or `INPUT_VEH_MOVE_RIGHT_ONLY`
+local KEY_ASCEND       = Keys.ascend        or `INPUT_VEH_FLY_THROTTLE_UP`
+local KEY_BRAKE        = Keys.brake         or `INPUT_CONTEXT_X`
+local KEY_LOCK_ALT     = Keys.lockAltitude  or `INPUT_CONTEXT_A`
+local KEY_STORE        = Keys.storeBalloon  or `INPUT_VEH_HORN`
+local KEY_ACCEPT_INV   = Keys.acceptInvite  or `INPUT_FRONTEND_ACCEPT`
+local KEY_DECLINE_INV  = Keys.declineInvite or `INPUT_FRONTEND_CANCEL`
+
 local balloonPrompts = UipromptGroup:new(T.Prompts.Ballon)
-local nsPrompt = Uiprompt:new({`INPUT_VEH_MOVE_UP_ONLY`, `INPUT_VEH_MOVE_DOWN_ONLY` }, T.Prompts.NorthSouth, balloonPrompts)
-local wePrompt = Uiprompt:new({`INPUT_VEH_MOVE_LEFT_ONLY`, `INPUT_VEH_MOVE_RIGHT_ONLY`}, T.Prompts.WestEast, balloonPrompts)
-local brakePrompt = Uiprompt:new(`INPUT_CONTEXT_X`, T.Prompts.DownBalloon, balloonPrompts)
-local lockZPrompt = Uiprompt:new(`INPUT_CONTEXT_A`, T.Prompts.LockInAltitude, balloonPrompts)
-local throttlePrompt = Uiprompt:new(`INPUT_VEH_FLY_THROTTLE_UP`, T.Prompts.UpBalloon, balloonPrompts)
-local deleteBalloonPrompt = Uiprompt:new(`INPUT_VEH_HORN`, T.Prompts.RemoveBalloon, balloonPrompts)
+local nsPrompt = Uiprompt:new({KEY_FORWARD, KEY_BACKWARD}, T.Prompts.NorthSouth, balloonPrompts)
+local wePrompt = Uiprompt:new({KEY_LEFT, KEY_RIGHT}, T.Prompts.WestEast, balloonPrompts)
+local brakePrompt = Uiprompt:new(KEY_BRAKE, T.Prompts.DownBalloon, balloonPrompts)
+local lockZPrompt = Uiprompt:new(KEY_LOCK_ALT, T.Prompts.LockInAltitude, balloonPrompts)
+local throttlePrompt = Uiprompt:new(KEY_ASCEND, T.Prompts.UpBalloon, balloonPrompts)
+local deleteBalloonPrompt = Uiprompt:new(KEY_STORE, T.Prompts.RemoveBalloon, balloonPrompts)
 
 -- Invite System Prompts
 local function CreateInvitePrompts()
     invitePromptGroup = UipromptGroup:new("Balloon Invite")
-    acceptInvitePrompt = Uiprompt:new(`INPUT_FRONTEND_ACCEPT`, "Accept Invite (ENTER)", invitePromptGroup)
-    declineInvitePrompt = Uiprompt:new(`INPUT_FRONTEND_CANCEL`, "Decline Invite (BACKSPACE)", invitePromptGroup)
+    acceptInvitePrompt = Uiprompt:new(KEY_ACCEPT_INV, "Accept Invite (ENTER)", invitePromptGroup)
+    declineInvitePrompt = Uiprompt:new(KEY_DECLINE_INV, "Decline Invite (BACKSPACE)", invitePromptGroup)
 end
 
 CreateInvitePrompts()
@@ -66,7 +79,7 @@ end)
 Citizen.CreateThread(function()
     while true do
         if balloon == spawn_balloon then
-            DisableControlAction(0, `INPUT_VEH_HORN`, true)
+            DisableControlAction(0, KEY_STORE, true)
         end
         Citizen.Wait(0)
     end
@@ -132,16 +145,16 @@ Citizen.CreateThread(function()
 
             -- Check if player tries to control as non-owner
             if not isOwner then
-                local tryingControl = IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) or 
-                                    IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) or
-                                    IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) or
-                                    IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) or
-                                    IsControlPressed(0, `INPUT_CONTEXT_X`) or
-                                    IsControlPressed(0, `INPUT_CONTEXT_A`) or
-                                    IsControlPressed(0, `INPUT_VEH_FLY_THROTTLE_UP`)
+                local tryingControl = IsControlPressed(0, KEY_FORWARD) or 
+                                    IsControlPressed(0, KEY_BACKWARD) or
+                                    IsControlPressed(0, KEY_LEFT) or
+                                    IsControlPressed(0, KEY_RIGHT) or
+                                    IsControlPressed(0, KEY_BRAKE) or
+                                    IsControlPressed(0, KEY_LOCK_ALT) or
+                                    IsControlPressed(0, KEY_ASCEND)
                 
                 if tryingControl then
-                    Core.NotifyLeft("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 2000, "COLOR_RED")
+                    Framework.ClientNotify("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 2000, "COLOR_RED")
                     Citizen.Wait(2000)
                 end
                 Citizen.Wait(100)
@@ -160,34 +173,34 @@ Citizen.CreateThread(function()
                 else
                     if useCameraRelativeControls then
                         local forwardVec, rightVec = GetCameraRelativeVectors()
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
+                        if IsControlPressed(0, KEY_FORWARD) then
                             v2 = v2 + forwardVec * speed
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
+                        if IsControlPressed(0, KEY_BACKWARD) then
                             v2 = v2 - forwardVec * speed
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
+                        if IsControlPressed(0, KEY_LEFT) then
                             v2 = v2 - rightVec * speed
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
+                        if IsControlPressed(0, KEY_RIGHT) then
                             v2 = v2 + rightVec * speed
                         end
                     else
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_UP_ONLY`) then
+                        if IsControlPressed(0, KEY_FORWARD) then
                             v2 = v2 + vector3(0, speed, 0)
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_DOWN_ONLY`) then
+                        if IsControlPressed(0, KEY_BACKWARD) then
                             v2 = v2 - vector3(0, speed, 0)
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_LEFT_ONLY`) then
+                        if IsControlPressed(0, KEY_LEFT) then
                             v2 = v2 - vector3(speed, 0, 0)
                         end
-                        if IsControlPressed(0, `INPUT_VEH_MOVE_RIGHT_ONLY`) then
+                        if IsControlPressed(0, KEY_RIGHT) then
                             v2 = v2 + vector3(speed, 0, 0)
                         end
                     end
 
-                    if IsControlPressed(0, `INPUT_CONTEXT_X`) then
+                    if IsControlPressed(0, KEY_BRAKE) then
                         if bv then
                             local x = bv.x > 0 and bv.x - speed or bv.x + speed
                             local y = bv.y > 0 and bv.y - speed or bv.y + speed
@@ -198,7 +211,7 @@ Citizen.CreateThread(function()
                         bv = nil
                     end
 
-                    if IsControlJustPressed(0, `INPUT_CONTEXT_A`) then
+                    if IsControlJustPressed(0, KEY_LOCK_ALT) then
                         lockZ = not lockZ
                         if lockZ then
                             lockZPrompt:setText(T.Prompts.UnlockInAltitude)
@@ -207,13 +220,13 @@ Citizen.CreateThread(function()
                         end
                     end
 
-                    if lockZ and not IsControlPressed(0, `INPUT_VEH_FLY_THROTTLE_UP`) then
+                    if lockZ and not IsControlPressed(0, KEY_ASCEND) then
                         SetEntityVelocity(balloon, vector3(v2.x, v2.y, 0.0))
                     elseif v2 ~= v1 then
                         SetEntityVelocity(balloon, v2)
                     end
 
-                    if IsControlJustPressed(0, `INPUT_VEH_HORN`) then
+                    if IsControlJustPressed(0, KEY_STORE) then
                         if DoesEntityExist(balloon) then
                             local balloonHeight = GetEntityHeightAboveGround(balloon)
                             if balloonHeight <= 0.5 then
@@ -263,7 +276,7 @@ local function SetupDealerPrompt()
     Citizen.CreateThread(function()
         local str = T.DealerPrompt or "Balloon Dealer (Purchase Only)"
         _DealerPrompt = Citizen.InvokeNative(0x04F97DE45A519419)
-        PromptSetControlAction(_DealerPrompt, 0x760A9C6F)
+        PromptSetControlAction(_DealerPrompt, (Config.Keybinds and Config.Keybinds.shopInteract) or 0x760A9C6F)
         str = CreateVarString(10, 'LITERAL_STRING', str)
         PromptSetText(_DealerPrompt, str)
         PromptSetEnabled(_DealerPrompt, true)
@@ -376,7 +389,7 @@ Citizen.CreateThread(function()
                 -- Notify at most once every 3 seconds
                 local now = GetGameTimer()
                 if (now - lastNotifyTime) >= 3000 then
-                    Core.NotifyLeft(T.Tittle, T.AltitudeLimit or "Maximum altitude reached!", "menu_textures", "cross", 3000, "COLOR_ORANGE")
+                    Framework.ClientNotify(T.Tittle, T.AltitudeLimit or "Maximum altitude reached!", "menu_textures", "cross", 3000, "COLOR_ORANGE")
                     lastNotifyTime = now
                 end
             end
@@ -391,7 +404,7 @@ function BalloonPrompt()
     Citizen.CreateThread(function()
         local str = T.Shop
         _BalloonPrompt = Citizen.InvokeNative(0x04F97DE45A519419)
-        PromptSetControlAction(_BalloonPrompt, 0x760A9C6F)
+        PromptSetControlAction(_BalloonPrompt, (Config.Keybinds and Config.Keybinds.shopInteract) or 0x760A9C6F)
         str = CreateVarString(10, 'LITERAL_STRING', str)
         PromptSetText(_BalloonPrompt, str)
         PromptSetEnabled(_BalloonPrompt, true)
@@ -523,7 +536,7 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon, damageStatus)
 
         elseif data.current.value == "transfer" then
             if not hasBalloon then
-                Core.NotifyLeft(T.Tittle, T.Youdonthave, "menu_textures", "cross", 4000, "COLOR_RED")
+                Framework.ClientNotify(T.Tittle, T.Youdonthave, "menu_textures", "cross", 4000, "COLOR_RED")
                 return
             end
 
@@ -549,7 +562,7 @@ AddEventHandler('rs_balloon:openMenu', function(hasBalloon, damageStatus)
                     TriggerServerEvent('rs_balloon:transferBalloon', playerId)
                     menu.close()
                 else
-                    Core.NotifyLeft(T.Tittle, T.Invalid, "menu_textures", "cross", 4000, "COLOR_RED")
+                    Framework.ClientNotify(T.Tittle, T.Invalid, "menu_textures", "cross", 4000, "COLOR_RED")
                 end
             end
         end
@@ -584,7 +597,7 @@ function OpenInviteMenu()
     end
     
     if #nearbyPlayers == 0 then
-        Core.NotifyLeft("Balloon", "No nearby players to invite", "menu_textures", "cross", 3000, "COLOR_RED")
+        Framework.ClientNotify("Balloon", "No nearby players to invite", "menu_textures", "cross", 3000, "COLOR_RED")
         return
     end
     
@@ -778,7 +791,7 @@ AddEventHandler("rs_balloon:balloonWarning", function(secondsLeft)
     local message = ""
 
     if secondsLeft == 0 then
-        Core.NotifyLeft(T.Tittle, T.BalloonExpired, "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.ClientNotify(T.Tittle, T.BalloonExpired, "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -795,7 +808,7 @@ AddEventHandler("rs_balloon:balloonWarning", function(secondsLeft)
         message = T.BalloonExpiresPrefix .. secondsLeft .. T.Seconds
     end
 
-    Core.NotifyLeft(T.Tittle, message, "generic_textures", "tick", 4000, "COLOR_GREEN")
+    Framework.ClientNotify(T.Tittle, message, "generic_textures", "tick", 4000, "COLOR_GREEN")
 end)
 
 local spawn_ballon = nil
@@ -808,7 +821,7 @@ AddEventHandler('rs_balloon:spawnBalloon', function(locationName)
     end
 
     if spawn_ballon and DoesEntityExist(spawn_ballon) then
-        Core.NotifyLeft(T.Tittle, T.Youhave, "menu_textures", "cross", 4000, "COLOR_RED")
+        Framework.ClientNotify(T.Tittle, T.Youhave, "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
 
@@ -868,23 +881,23 @@ AddEventHandler('rs_balloon:receiveInvite', function(fromPlayerId, fromPlayerNam
         fromId = fromPlayerId,
         balloonNetId = balloonNetId
     }
-    Core.NotifyLeft("Balloon Invite", "You received an invite from " .. fromPlayerName, "generic_textures", "tick", 5000, "COLOR_BLUE")
+    Framework.ClientNotify("Balloon Invite", "You received an invite from " .. fromPlayerName, "generic_textures", "tick", 5000, "COLOR_BLUE")
 end)
 
 RegisterNetEvent('rs_balloon:inviteExpired')
 AddEventHandler('rs_balloon:inviteExpired', function()
     pendingInvite = nil
-    Core.NotifyLeft("Balloon Invite", "Invite expired", "menu_textures", "cross", 3000, "COLOR_RED")
+    Framework.ClientNotify("Balloon Invite", "Invite expired", "menu_textures", "cross", 3000, "COLOR_RED")
 end)
 
 RegisterNetEvent('rs_balloon:passengerJoined')
 AddEventHandler('rs_balloon:passengerJoined', function(passengerName)
-    Core.NotifyLeft("Balloon", passengerName .. " joined your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
+    Framework.ClientNotify("Balloon", passengerName .. " joined your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
 end)
 
 RegisterNetEvent('rs_balloon:passengerLeft')
 AddEventHandler('rs_balloon:passengerLeft', function(passengerName)
-    Core.NotifyLeft("Balloon", passengerName .. " left your balloon", "menu_textures", "cross", 3000, "COLOR_YELLOW")
+    Framework.ClientNotify("Balloon", passengerName .. " left your balloon", "menu_textures", "cross", 3000, "COLOR_YELLOW")
 end)
 
 RegisterNetEvent('rs_balloon:updatePassengerCount')
@@ -894,14 +907,14 @@ end)
 
 RegisterNetEvent('rs_balloon:notOwnerControl')
 AddEventHandler('rs_balloon:notOwnerControl', function()
-    Core.NotifyLeft("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 3000, "COLOR_RED")
+    Framework.ClientNotify("Balloon", "Only the owner can control this balloon", "menu_textures", "cross", 3000, "COLOR_RED")
 end)
 
 -- Passenger added notification (for owner)
 RegisterNetEvent('rs_balloon:passengerAdded')
 AddEventHandler('rs_balloon:passengerAdded', function(passengerSrc, balloonNetId)
     passengerCount = passengerCount + 1
-    Core.NotifyLeft("Balloon", "Passenger added to your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
+    Framework.ClientNotify("Balloon", "Passenger added to your balloon", "generic_textures", "tick", 3000, "COLOR_GREEN")
 end)
 
 -- Notify passenger they joined
@@ -909,7 +922,7 @@ RegisterNetEvent('rs_balloon:youArePassenger')
 AddEventHandler('rs_balloon:youArePassenger', function(ownerSrc, balloonNetId)
     balloonOwnerSource = ownerSrc
     currentBalloonNetId = balloonNetId
-    Core.NotifyLeft("Balloon", T.InviteAccepted, "generic_textures", "tick", 3000, "COLOR_GREEN")
+    Framework.ClientNotify("Balloon", T.InviteAccepted, "generic_textures", "tick", 3000, "COLOR_GREEN")
 end)
 
 -- Passenger removed from balloon
@@ -918,7 +931,7 @@ AddEventHandler('rs_balloon:removedFromBalloon', function(balloonNetId)
     if currentBalloonNetId == balloonNetId then
         balloonOwnerSource = nil
         currentBalloonNetId = nil
-        Core.NotifyLeft("Balloon", "You were removed from the balloon", "menu_textures", "cross", 3000, "COLOR_RED")
+        Framework.ClientNotify("Balloon", "You were removed from the balloon", "menu_textures", "cross", 3000, "COLOR_RED")
     end
 end)
 
@@ -926,7 +939,7 @@ end)
 RegisterNetEvent('rs_balloon:balloonDestroyed')
 AddEventHandler('rs_balloon:balloonDestroyed', function(balloonNetId)
     if currentBalloonNetId == balloonNetId then
-        Core.NotifyLeft("Balloon", "The balloon has been destroyed!", "menu_textures", "cross", 5000, "COLOR_RED")
+        Framework.ClientNotify("Balloon", "The balloon has been destroyed!", "menu_textures", "cross", 5000, "COLOR_RED")
         if balloon and DoesEntityExist(balloon) then
             SetEntityAsNoLongerNeeded(balloon)
             DeleteEntity(balloon)
@@ -946,7 +959,7 @@ AddEventHandler('rs_balloon:triggerCrash', function(balloonNetId)
     if currentBalloonNetId == balloonNetId or (balloon and NetworkGetNetworkIdFromEntity(balloon) == balloonNetId) then
         isBalloonCrashing = true
         balloonDamaged = true
-        Core.NotifyLeft("Balloon", T.BalloonCrashing, "menu_textures", "cross", 5000, "COLOR_RED")
+        Framework.ClientNotify("Balloon", T.BalloonCrashing, "menu_textures", "cross", 5000, "COLOR_RED")
         
         -- Play crash sound
         PlaySoundFrontend("CHECKPOINT_MISSED", "HUD_MINI_GAME_SOUNDSET", true, 1)
@@ -969,7 +982,7 @@ AddEventHandler('rs_balloon:updateDamage', function(balloonNetId, hitCount, maxH
     if currentBalloonNetId == balloonNetId then
         balloonDamaged = isDamaged
         if isDamaged then
-            Core.NotifyLeft("Balloon", string.format("%s (%d/%d)", T.BalloonHit, hitCount, maxHits), "menu_textures", "cross", 3000, "COLOR_ORANGE")
+            Framework.ClientNotify("Balloon", string.format("%s (%d/%d)", T.BalloonHit, hitCount, maxHits), "menu_textures", "cross", 3000, "COLOR_ORANGE")
         end
     end
 end)
@@ -981,7 +994,7 @@ AddEventHandler('rs_balloon:receiveDamageStatus', function(damageInfo)
         local statusMsg = damageInfo.isDamaged and T.DamageStatusDamaged or T.DamageStatusHealthy
         local maxHitsValue = damageInfo.maxHits or Config.DamageSystem.arrowHitsToDestroyMax or 15
         local hitMsg = string.format("%s %d/%d", T.HitCounter, damageInfo.hits or 0, maxHitsValue)
-        Core.NotifyLeft("Balloon Status", statusMsg .. "\n" .. hitMsg, "generic_textures", "tick", 5000, "COLOR_BLUE")
+        Framework.ClientNotify("Balloon Status", statusMsg .. "\n" .. hitMsg, "generic_textures", "tick", 5000, "COLOR_BLUE")
     end
 end)
 
@@ -991,7 +1004,7 @@ AddEventHandler('rs_balloon:balloonRepaired', function(balloonNetId)
     if currentBalloonNetId == balloonNetId then
         balloonDamaged = false
         isBalloonCrashing = false
-        Core.NotifyLeft("Balloon", T.BalloonRepaired, "generic_textures", "tick", 3000, "COLOR_GREEN")
+        Framework.ClientNotify("Balloon", T.BalloonRepaired, "generic_textures", "tick", 3000, "COLOR_GREEN")
     end
 end)
 
@@ -1065,14 +1078,14 @@ Citizen.CreateThread(function()
             local groupName = CreateVarString(10, 'LITERAL_STRING', "Balloon Invite from " .. pendingInvite.fromName)
             PromptSetActiveGroupThisFrame(invitePromptGroup.group, groupName)
             
-            if IsControlJustPressed(0, `INPUT_FRONTEND_ACCEPT`) then
+            if IsControlJustPressed(0, KEY_ACCEPT_INV) then
                 TriggerServerEvent('rs_balloon:acceptInvite', pendingInvite.fromId)
                 pendingInvite = nil
                 Citizen.Wait(500)
-            elseif IsControlJustPressed(0, `INPUT_FRONTEND_CANCEL`) then
+            elseif IsControlJustPressed(0, KEY_DECLINE_INV) then
                 TriggerServerEvent('rs_balloon:declineInvite', pendingInvite.fromId)
                 pendingInvite = nil
-                Core.NotifyLeft("Balloon Invite", "Invite declined", "menu_textures", "cross", 3000, "COLOR_RED")
+                Framework.ClientNotify("Balloon Invite", "Invite declined", "menu_textures", "cross", 3000, "COLOR_RED")
                 Citizen.Wait(500)
             end
             
@@ -1110,7 +1123,7 @@ end)
 RegisterNetEvent('rs_balloon:balloonCrashing')
 AddEventHandler('rs_balloon:balloonCrashing', function()
     isBalloonCrashing = true
-    Core.NotifyLeft("Balloon", "Balloon is damaged! Crashing!", "menu_textures", "cross", 5000, "COLOR_RED")
+    Framework.ClientNotify("Balloon", "Balloon is damaged! Crashing!", "menu_textures", "cross", 5000, "COLOR_RED")
     
     PlaySoundFrontend("CHECKPOINT_PERFECT", "HUD_MINI_GAME_SOUNDSET", true, 1)
     
@@ -1127,7 +1140,7 @@ AddEventHandler('rs_balloon:damageStatusUpdated', function(isDamaged)
     balloonDamaged = isDamaged
     if not isDamaged then
         isBalloonCrashing = false
-        Core.NotifyLeft("Balloon", "Balloon repaired successfully!", "generic_textures", "tick", 3000, "COLOR_GREEN")
+        Framework.ClientNotify("Balloon", "Balloon repaired successfully!", "generic_textures", "tick", 3000, "COLOR_GREEN")
     end
 end)
 
