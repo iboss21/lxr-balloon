@@ -216,6 +216,14 @@ Config.PassengerSystem = {
     maxPassengers = 2,             -- Maximum passengers (not including owner), total 3 players
     inviteDistance = 10.0,         -- Maximum distance in meters to invite a player
     inviteTimeout = 30,            -- Time in seconds for invite to expire
+    -- Teleport passenger into balloon when they accept invite (RedM)
+    warpIntoVehicle = true,
+    warpTimeoutMs = 15000,         -- Max wait for network entity to exist
+    -- Seat index per slot: driver is typically -1; first passenger 0; second 1 (adjust if needed)
+    seatForSlot = {
+        passenger1 = 0,
+        passenger2 = 1,
+    },
 }
 
 -- Balloon damage and repair system settings

@@ -746,8 +746,23 @@ end)
 -- PASSENGER SYSTEM
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+local function getMaxPassengers()
+    local ps = Config.PassengerSystem
+    if ps and type(ps.maxPassengers) == 'number' and ps.maxPassengers > 0 then
+        return ps.maxPassengers
+    end
+    return 2
+end
+
+--- Network IDs must be numeric keys; menu/events may send strings.
+local function normalizeBalloonNetId(balloonNetId)
+    local n = tonumber(balloonNetId)
+    return n or balloonNetId
+end
+
 RegisterNetEvent('rs_balloon:trackBalloonOwner')
 AddEventHandler('rs_balloon:trackBalloonOwner', function(balloonNetId)
+    balloonNetId = normalizeBalloonNetId(balloonNetId)
     local src = source
     local Character = GetCharacterData(src)
     
@@ -773,7 +788,20 @@ end)
 RegisterNetEvent('rs_balloon:invitePassenger')
 AddEventHandler('rs_balloon:invitePassenger', function(balloonNetId, targetSrc)
     local src = source
-    
+    balloonNetId = normalizeBalloonNetId(balloonNetId)
+    targetSrc = tonumber(targetSrc)
+    local maxPass = getMaxPassengers()
+
+    if not targetSrc then
+        Framework.NotifyLeft(src, T.Tittle, "Invalid player id", "menu_textures", "cross", 4000, "COLOR_RED")
+        return
+    end
+
+    if targetSrc == src then
+        Framework.NotifyLeft(src, T.Tittle, "You cannot invite yourself", "menu_textures", "cross", 4000, "COLOR_RED")
+        return
+    end
+
     if not balloonOwners[balloonNetId] or balloonOwners[balloonNetId].owner ~= src then
         Framework.NotifyLeft(src, T.Tittle, "You are not the owner of this balloon", "menu_textures", "cross", 4000, "COLOR_RED")
         return
@@ -786,8 +814,8 @@ AddEventHandler('rs_balloon:invitePassenger', function(balloonNetId, targetSrc)
         end
     end
     
-    if passengerCount >= 2 then
-        Framework.NotifyLeft(src, T.Tittle, "Balloon is full (max 2 passengers)", "menu_textures", "cross", 4000, "COLOR_RED")
+    if passengerCount >= maxPass then
+        Framework.NotifyLeft(src, T.Tittle, "Balloon is full (max " .. maxPass .. " passengers)", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
@@ -805,13 +833,15 @@ end)
 RegisterNetEvent('rs_balloon:acceptInvite')
 AddEventHandler('rs_balloon:acceptInvite', function(inviterSrc)
     local src = source
-    
-    if not pendingInvites[src] or pendingInvites[src].inviterSrc ~= inviterSrc then
+    inviterSrc = tonumber(inviterSrc)
+
+    if not inviterSrc or not pendingInvites[src] or pendingInvites[src].inviterSrc ~= inviterSrc then
         Framework.NotifyLeft(src, T.Tittle, "No valid invite found", "menu_textures", "cross", 4000, "COLOR_RED")
         return
     end
     
-    local balloonNetId = pendingInvites[src].balloonNetId
+    local balloonNetId = normalizeBalloonNetId(pendingInvites[src].balloonNetId)
+    local maxPass = getMaxPassengers()
     local passengerCount = 0
     
     if balloonPassengers[balloonNetId] then
@@ -820,17 +850,21 @@ AddEventHandler('rs_balloon:acceptInvite', function(inviterSrc)
         end
     end
     
-    if passengerCount >= 2 then
+    if passengerCount >= maxPass then
         Framework.NotifyLeft(src, T.Tittle, "Balloon is full", "menu_textures", "cross", 4000, "COLOR_RED")
         pendingInvites[src] = nil
         return
     end
     
+    if not balloonPassengers[balloonNetId] then
+        balloonPassengers[balloonNetId] = {}
+    end
+
     local slotKey = passengerCount == 0 and "passenger1" or "passenger2"
     balloonPassengers[balloonNetId][slotKey] = src
     
     TriggerClientEvent('rs_balloon:passengerAdded', inviterSrc, src, balloonNetId)
-    TriggerClientEvent('rs_balloon:youArePassenger', src, balloonNetId)
+    TriggerClientEvent('rs_balloon:youArePassenger', src, inviterSrc, balloonNetId, slotKey)
     
     Framework.NotifyLeft(src, T.Tittle, "You joined the balloon", "generic_textures", "tick", 4000, "COLOR_GREEN")
     Framework.NotifyLeft(inviterSrc, T.Tittle, GetPlayerName(src) .. " joined your balloon", "generic_textures", "tick", 4000, "COLOR_GREEN")
@@ -841,8 +875,9 @@ end)
 RegisterNetEvent('rs_balloon:declineInvite')
 AddEventHandler('rs_balloon:declineInvite', function(inviterSrc)
     local src = source
-    
-    if pendingInvites[src] and pendingInvites[src].inviterSrc == inviterSrc then
+    inviterSrc = tonumber(inviterSrc)
+
+    if inviterSrc and pendingInvites[src] and pendingInvites[src].inviterSrc == inviterSrc then
         Framework.NotifyLeft(inviterSrc, T.Tittle, GetPlayerName(src) .. " declined your invite", "menu_textures", "cross", 4000, "COLOR_RED")
         pendingInvites[src] = nil
     end

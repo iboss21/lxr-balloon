@@ -610,7 +610,10 @@ function OpenInviteMenu()
     },
     function(data, menu)
         if data.current.value and currentBalloonNetId then
-            TriggerServerEvent('rs_balloon:invitePassenger', currentBalloonNetId, data.current.value)
+            local targetServerId = tonumber(data.current.value)
+            if targetServerId then
+                TriggerServerEvent('rs_balloon:invitePassenger', currentBalloonNetId, targetServerId)
+            end
             menu.close()
         end
     end,
@@ -869,6 +872,139 @@ end)
 -- Passenger System Events
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+local BALLOON_MODEL_HASH = GetHashKey("hotairballoon01")
+
+--- RDR3 SET_PED_INTO_VEHICLE (fallback if global fails)
+local N_SET_PED_INTO_VEHICLE_4 = 0xEAE60E6940938AB8
+local N_SET_PED_INTO_VEHICLE_3 = 0xBC40F4F9E0E2E2BC
+
+local function isHotAirBalloonEntity(entity)
+    return entity and entity ~= 0 and DoesEntityExist(entity) and GetEntityModel(entity) == BALLOON_MODEL_HASH
+end
+
+local function isVehicleSeatFreeSafe(vehicle, seatIndex)
+    local ok, free = pcall(function()
+        return IsVehicleSeatFree(vehicle, seatIndex)
+    end)
+    if ok then
+        return free
+    end
+    return true
+end
+
+local function putPedIntoBalloonSeat(ped, vehicle, seatIndex)
+    if type(SetPedIntoVehicle) == "function" then
+        pcall(function()
+            SetPedIntoVehicle(ped, vehicle, seatIndex)
+        end)
+        Citizen.Wait(150)
+        if GetVehiclePedIsIn(ped, false) == vehicle then
+            return true
+        end
+    end
+    pcall(function()
+        Citizen.InvokeNative(N_SET_PED_INTO_VEHICLE_4, ped, vehicle, seatIndex, false)
+    end)
+    Citizen.Wait(80)
+    if GetVehiclePedIsIn(ped, false) == vehicle then
+        return true
+    end
+    pcall(function()
+        Citizen.InvokeNative(N_SET_PED_INTO_VEHICLE_3, ped, vehicle, seatIndex)
+    end)
+    Citizen.Wait(80)
+    return GetVehiclePedIsIn(ped, false) == vehicle
+end
+
+--- Resolve preferred seat index from server slot key (Config.PassengerSystem.seatForSlot).
+local function getPreferredSeatIndex(slotKey)
+    local ps = Config.PassengerSystem
+    local map = ps and ps.seatForSlot
+    if map and slotKey and map[slotKey] ~= nil then
+        return map[slotKey]
+    end
+    if slotKey == "passenger2" then
+        return 1
+    end
+    return 0
+end
+
+local function networkIdExists(netId)
+    local ok, exists = pcall(function()
+        return NetworkDoesNetworkIdExist(netId)
+    end)
+    return ok and exists
+end
+
+--- Wait for networked balloon entity, then warp local ped into passenger seat.
+local function WarpPassengerIntoBalloon(balloonNetId, slotKey)
+    local ps = Config.PassengerSystem
+    if ps and ps.warpIntoVehicle == false then
+        return
+    end
+
+    balloonNetId = tonumber(balloonNetId) or balloonNetId
+    local ped = PlayerPedId()
+    local timeout = (ps and ps.warpTimeoutMs) or 15000
+    local deadline = GetGameTimer() + timeout
+    local vehicle = 0
+
+    while GetGameTimer() < deadline do
+        if networkIdExists(balloonNetId) then
+            local ent = NetworkGetEntityFromNetworkId(balloonNetId)
+            if ent and ent ~= 0 and isHotAirBalloonEntity(ent) then
+                vehicle = ent
+                break
+            end
+        end
+        Citizen.Wait(100)
+    end
+
+    if vehicle == 0 then
+        Framework.ClientNotify("Balloon", "Could not find the balloon — stay nearby and try again.", "menu_textures", "cross", 4000, "COLOR_ORANGE")
+        return
+    end
+
+    NetworkRequestControlOfEntity(vehicle)
+    local ctrlUntil = GetGameTimer() + 2500
+    while not NetworkHasControlOfEntity(vehicle) and GetGameTimer() < ctrlUntil do
+        NetworkRequestControlOfEntity(vehicle)
+        Citizen.Wait(0)
+    end
+
+    local vx, vy, vz = table.unpack(GetEntityCoords(vehicle))
+    pcall(function()
+        RequestCollisionAtCoord(vx, vy, vz)
+    end)
+    ClearPedTasksImmediately(ped)
+
+    local preferred = getPreferredSeatIndex(slotKey)
+    local alt = (preferred == 0) and 1 or 0
+    local trySeats = {}
+    local function addSeat(seat)
+        if seat == nil then return end
+        for _, v in ipairs(trySeats) do
+            if v == seat then return end
+        end
+        trySeats[#trySeats + 1] = seat
+    end
+    addSeat(preferred)
+    addSeat(alt)
+    for s = 0, 3 do
+        addSeat(s)
+    end
+
+    for _, seatIndex in ipairs(trySeats) do
+        if isVehicleSeatFreeSafe(vehicle, seatIndex) then
+            if putPedIntoBalloonSeat(ped, vehicle, seatIndex) then
+                return
+            end
+        end
+    end
+
+    Framework.ClientNotify("Balloon", "Could not enter a seat — the balloon may be full.", "menu_textures", "cross", 4000, "COLOR_RED")
+end
+
 RegisterNetEvent('rs_balloon:setOwner')
 AddEventHandler('rs_balloon:setOwner', function(ownerSource)
     balloonOwnerSource = ownerSource
@@ -919,16 +1055,21 @@ end)
 
 -- Notify passenger they joined
 RegisterNetEvent('rs_balloon:youArePassenger')
-AddEventHandler('rs_balloon:youArePassenger', function(ownerSrc, balloonNetId)
-    balloonOwnerSource = ownerSrc
-    currentBalloonNetId = balloonNetId
+AddEventHandler('rs_balloon:youArePassenger', function(ownerSrc, balloonNetId, slotKey)
+    balloonOwnerSource = tonumber(ownerSrc) or ownerSrc
+    currentBalloonNetId = tonumber(balloonNetId) or balloonNetId
     Framework.ClientNotify("Balloon", T.InviteAccepted, "generic_textures", "tick", 3000, "COLOR_GREEN")
+    Citizen.CreateThread(function()
+        WarpPassengerIntoBalloon(currentBalloonNetId, slotKey)
+    end)
 end)
 
 -- Passenger removed from balloon
 RegisterNetEvent('rs_balloon:removedFromBalloon')
 AddEventHandler('rs_balloon:removedFromBalloon', function(balloonNetId)
-    if currentBalloonNetId == balloonNetId then
+    local nid = tonumber(balloonNetId) or balloonNetId
+    local cur = tonumber(currentBalloonNetId) or currentBalloonNetId
+    if cur == nid then
         balloonOwnerSource = nil
         currentBalloonNetId = nil
         Framework.ClientNotify("Balloon", "You were removed from the balloon", "menu_textures", "cross", 3000, "COLOR_RED")
